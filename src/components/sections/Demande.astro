@@ -1,26 +1,38 @@
 ---
-// Formulaire de demande : chaque demande part dans le CRM Notion de ZTi (copie dans le Google Sheet, et e-mail),
-// avec la page, la campagne et la source de la publicité. Aucun contrôle natif : choix en boutons, case maison.
-// Deux étapes (votre situation, puis vos coordonnées), ou une seule si la section est réglée « court ».
+// Formulaire de demande, en quatre versions choisies page par page (champ « formulaire » de la section) :
+// - general : accueil, contact, services. Une étape, simple.
+// - ecoles : page de campagne des écoles. Une étape, avec le vocabulaire des établissements scolaires.
+// - entreprises : page de campagne des PME. Trois étapes (votre entreprise, votre situation, vos coordonnées),
+//   questions reprises de l'ancien formulaire Tally de ZTi.
+// - particuliers : page des particuliers. Une étape : le problème, l'appareil, les coordonnées.
+// Chaque demande part à l'adresse d'envoi des Réglages du site ; sans adresse, elle part par WhatsApp (déjà rédigée).
 import Cadre from './Cadre.astro';
 import Icone from '../Icone.astro';
 import { reglages, services, lien } from '../../lib/contenu';
 const { s, premier = false, page, campagne } = Astro.props as { s: any; premier?: boolean; page: string; campagne: string };
 const r = await reglages();
-const profils = [
-  ['ecole', 'Établissement scolaire'], ['entreprise', 'Entreprise'], ['institution', 'Institution'], ['particulier', 'Particulier'],
-];
+const id = s.ancre || 'demande';
+const variante: string = ['general', 'ecoles', 'entreprises', 'particuliers'].includes(s.formulaire) ? s.formulaire : 'general';
+const profilFixe = ({ ecoles: 'Établissement scolaire', entreprises: 'Entreprise', particuliers: 'Particulier' } as any)[variante] || '';
+
+const profils = [['ecole', 'Établissement scolaire'], ['entreprise', 'Entreprise'], ['institution', 'Institution'], ['particulier', 'Particulier']];
 const besoins: string[] = s.besoins?.length ? s.besoins : (await services()).map(x => x.data.titre);
-const moments = ['Matin', 'Midi', 'Après-midi', 'Soir'];
-// questions de qualification (reprises du formulaire Tally de ZTi) : étape 1 ; les coordonnées : étape 2
-const court = !!s.court;
-const postes = ['1 à 5', '6 à 20', '21 à 50', 'Plus de 50'];
+const moments = variante === 'entreprises' ? ['Matin (8 h – 12 h)', 'Après-midi (12 h – 17 h)', 'Soir (17 h – 19 h)'] : ['Matin', 'Midi', 'Après-midi', 'Soir'];
+// écoles
+const typesEcole = ['Maternelle et primaire', 'Collège ou lycée', 'Université ou institut', 'Centre de formation'];
+const fonctionsEcole = ['Fondateur', 'Promoteur', 'Directeur', 'Principal', 'Proviseur', 'Censeur', 'Informaticien', 'Autre'];
+const postesEcole = ['1 à 10', '11 à 20', '21 à 40', 'Plus de 40'];
+// entreprises (ancien Tally)
+const postesEntreprise = ['PDG', 'DG', 'DAF', 'DSI', 'Directeur', 'Gérant', 'Autre'];
+const secteurs = ['Commerce', 'BTP', 'Santé', 'Éducation', 'Finance', 'ONG', 'Industrie', 'Services', 'Autre'];
+const parcs = ['1 à 5', '6 à 20', '21 à 50', 'Plus de 50'];
+const connus = ['Un post LinkedIn', 'Un post Facebook', 'Un groupe WhatsApp', 'Un ami ou un collègue', 'Un partenaire ou prestataire', 'Google', 'Autre'];
 const situations = [
   'Mes ordinateurs tombent souvent en panne ou sont très lents',
-  "J'ai déjà perdu des données importantes",
+  "J'ai déjà perdu des données importantes récemment",
   "J'ai peur de perdre mes données si une panne arrive",
-  "Je n'ai pas de suivi informatique régulier",
-  'Mes logiciels ne sont pas en règle (licences)',
+  "Je n'ai pas de suivi informatique régulier et ça m'inquiète",
+  'Mes licences logicielles ne sont pas en règle',
   'Tout va bien, mais je veux anticiper les pannes',
 ];
 const accompagnements = [
@@ -28,11 +40,16 @@ const accompagnements = [
   'Sécuriser mon informatique sur le long terme',
   "Je ne sais pas encore : j'attends les conseils du diagnostic",
 ];
-const prestataires = ['Oui, et je suis satisfait', 'Oui, mais je ne suis pas satisfait', "J'en avais un, plus maintenant", 'Non, personne'];
+const prestataires = ['Oui, et je suis satisfait', 'Oui, mais je ne suis pas vraiment satisfait', "J'en avais un, plus maintenant", "Non, personne ne s'en occupe"];
 const depenses = ['Moins de 25 000 F / mois', '25 000 à 75 000 F / mois', '75 000 à 200 000 F / mois', 'Plus de 200 000 F / mois', 'Je ne sais pas'];
-const secteurs = ['Commerce', 'BTP', 'Santé', 'Éducation', 'Finance', 'ONG', 'Industrie', 'Services', 'Autre'];
-const connus = ['Facebook', 'LinkedIn', 'WhatsApp', 'Un ami ou un collègue', 'Un partenaire', 'Google', 'Autre'];
-const id = s.ancre || 'demande';
+const villes = ['Yaoundé', 'Douala', 'Bafoussam', 'Autre ville'];
+// particuliers
+const problemes = ['Ordinateur lent', 'Virus', 'Fichiers perdus ou cachés', 'Ne démarre plus', 'Écran, clavier ou batterie', 'Installation de Windows ou de logiciels', 'Autre'];
+const appareils = ['Ordinateur portable', 'Ordinateur de bureau', 'Clé USB ou disque dur', 'Autre'];
+
+const etapes = variante === 'entreprises' ? ['Votre entreprise', 'Votre situation', 'Vos coordonnées'] : [''];
+type Q = { nom: string; titre: string; valeurs: string[]; requis?: boolean; liste?: boolean; facultatif?: string };
+const q = (nom: string, titre: string, valeurs: string[], o: Partial<Q> = {}): Q => ({ nom, titre, valeurs, ...o });
 ---
 <Cadre premier={premier} s={s} defaut="bleu" id={id}>
   <div class="demande">
@@ -41,128 +58,270 @@ const id = s.ancre || 'demande';
         {s.garanties?.length > 0 && <ul class="liste-coches">{s.garanties.map((g: string) => <li>{g}</li>)}</ul>}
         {s.mention && <p class="mention" style="margin-top:18px">{s.mention}</p>}
       </div>
-      <form class="formulaire rv" novalidate data-demande
+      <form class="formulaire rv" novalidate data-demande data-variante={variante} data-profil={profilFixe}
         data-endpoint={(r.mesures?.endpoint || '').trim()} data-wa={r.contact.whatsapp} data-mail={r.contact.email}
         data-merci={lien('/merci/')} data-page={page} data-campagne={campagne} data-sujet={s.sujet || 'Demande'}>
-        {!court && <p class="progression" aria-live="polite" data-progression>Étape 1 sur 2 · Votre situation</p>}
+        {etapes.length > 1 && <p class="progression" aria-live="polite" data-progression data-titres={JSON.stringify(etapes)}>Étape 1 sur {etapes.length} · {etapes[0]}</p>}
 
-        <div class="etape" data-etape="1">
-          <div class="champ" data-champ="profil">
-            <span class="titre-champ" id={`${id}-profil`}>Vous êtes</span>
-            <div class="choix" role="radiogroup" aria-labelledby={`${id}-profil`} data-choix="profil" data-unique>
-              {profils.map(([v, t]) => <button type="button" role="radio" aria-checked={s.profil === v ? 'true' : 'false'} data-valeur={v}>{t}</button>)}
+        {variante === 'general' && (
+          <div class="etape" data-etape="1">
+            <div class="champ" data-champ="profil" data-requis>
+              <span class="titre-champ" id={`${id}-profil`}>Vous êtes</span>
+              <div class="choix" role="radiogroup" aria-labelledby={`${id}-profil`} data-choix="profil" data-unique>
+                {profils.map(([v, t]) => <button type="button" role="radio" aria-checked={s.profil === v ? 'true' : 'false'} data-valeur={v}>{t}</button>)}
+              </div>
+              <span class="erreur">Choisissez une réponse.</span>
             </div>
-            <span class="erreur">Choisissez une réponse.</span>
+            <div class="champ" data-champ="organisation">
+              <label for={`${id}-organisation`}>Nom de l'établissement ou de l'entreprise</label>
+              <input id={`${id}-organisation`} name="organisation" autocomplete="organization" maxlength="120">
+              <span class="erreur">Indiquez le nom de votre établissement ou de votre entreprise.</span>
+            </div>
+            <div class="deux">
+              <div class="champ" data-champ="nom">
+                <label for={`${id}-nom`}>Nom et prénom</label>
+                <input id={`${id}-nom`} name="nom" autocomplete="name" maxlength="80" required>
+                <span class="erreur">Indiquez votre nom.</span>
+              </div>
+              <div class="champ" data-champ="fonction">
+                <label for={`${id}-fonction`}>Fonction <span class="facultatif">(facultatif)</span></label>
+                <input id={`${id}-fonction`} name="fonction" autocomplete="organization-title" maxlength="80">
+              </div>
+            </div>
+            <div class="deux">
+              <div class="champ" data-champ="tel">
+                <label for={`${id}-tel`}>Téléphone / WhatsApp</label>
+                <div class="telephone"><span>+237</span><input id={`${id}-tel`} name="tel" inputmode="tel" autocomplete="tel-national" maxlength="12" placeholder="6XX XX XX XX" required></div>
+                <span class="erreur">9 chiffres, en commençant par 6.</span>
+              </div>
+              <div class="champ" data-champ="email">
+                <label for={`${id}-email`}>E-mail <span class="facultatif">(facultatif)</span></label>
+                <input id={`${id}-email`} name="email" type="email" autocomplete="email" maxlength="120">
+                <span class="erreur">Cette adresse e-mail n'est pas valide.</span>
+              </div>
+            </div>
+            <div class="champ" data-champ="lieu">
+              <label for={`${id}-lieu`}>Quartier et ville <span class="facultatif">(facultatif)</span></label>
+              <input id={`${id}-lieu`} name="lieu" autocomplete="address-level2" maxlength="120" placeholder="Par exemple : Messassi, Yaoundé">
+            </div>
+            {besoins.length > 0 && (
+              <div class="champ" data-champ="besoins">
+                <span class="titre-champ" id={`${id}-besoins`}>Votre besoin <span class="facultatif">(plusieurs choix possibles)</span></span>
+                <div class="choix" role="group" aria-labelledby={`${id}-besoins`} data-choix="besoins">
+                  {besoins.map(b => <button type="button" aria-pressed="false" data-valeur={b}>{b}</button>)}
+                </div>
+              </div>
+            )}
+            <div class="champ" data-champ="message">
+              <label for={`${id}-message`}>Votre message <span class="facultatif">(facultatif)</span></label>
+              <textarea id={`${id}-message`} name="message" maxlength="1500"></textarea>
+            </div>
+            <div class="champ" data-champ="moment">
+              <span class="titre-champ" id={`${id}-moment`}>Meilleur moment pour vous rappeler <span class="facultatif">(facultatif)</span></span>
+              <div class="choix" role="radiogroup" aria-labelledby={`${id}-moment`} data-choix="moment" data-unique>
+                {moments.map(m => <button type="button" role="radio" aria-checked="false" data-valeur={m}>{m}</button>)}
+              </div>
+            </div>
           </div>
-          {!court && <>
-            <div class="champ" data-champ="postes" data-requis>
-              <span class="titre-champ" id={`${id}-postes`}>Nombre d'ordinateurs</span>
-              <div class="choix" role="radiogroup" aria-labelledby={`${id}-postes`} data-choix="postes" data-unique>
-                {postes.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
-              </div>
-              <span class="erreur">Choisissez une réponse.</span>
+        )}
+
+        {variante === 'ecoles' && (
+          <div class="etape" data-etape="1">
+            <div class="champ" data-champ="organisation">
+              <label for={`${id}-organisation`}>Nom de l'établissement</label>
+              <input id={`${id}-organisation`} name="organisation" autocomplete="organization" maxlength="120" placeholder="Par exemple : Complexe scolaire…">
+              <span class="erreur">Indiquez le nom de votre établissement.</span>
             </div>
-            <div class="champ" data-champ="situation" data-requis>
-              <span class="titre-champ" id={`${id}-situation`}>Ce qui décrit le mieux votre informatique aujourd'hui</span>
-              <div class="choix choix-liste" role="radiogroup" aria-labelledby={`${id}-situation`} data-choix="situation" data-unique>
-                {situations.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
+            {[q('secteur', "Type d'établissement", typesEcole, { facultatif: '(facultatif)' }),
+              q('fonction_choix', 'Votre fonction', fonctionsEcole, { facultatif: '(facultatif)' }),
+              q('postes', "Nombre d'ordinateurs (salle informatique et secrétariat)", postesEcole, { facultatif: '(facultatif)' })].map(x => (
+              <div class="champ" data-champ={x.nom}>
+                <span class="titre-champ" id={`${id}-${x.nom}`}>{x.titre} <span class="facultatif">{x.facultatif}</span></span>
+                <div class="choix" role="radiogroup" aria-labelledby={`${id}-${x.nom}`} data-choix={x.nom} data-unique>
+                  {x.valeurs.map(v => <button type="button" role="radio" aria-checked="false" data-valeur={v}>{v}</button>)}
+                </div>
               </div>
-              <span class="erreur">Choisissez une réponse.</span>
+            ))}
+            {besoins.length > 0 && (
+              <div class="champ" data-champ="besoins">
+                <span class="titre-champ" id={`${id}-besoins`}>Ce qui vous préoccupe <span class="facultatif">(plusieurs choix possibles)</span></span>
+                <div class="choix" role="group" aria-labelledby={`${id}-besoins`} data-choix="besoins">
+                  {besoins.map(b => <button type="button" aria-pressed="false" data-valeur={b}>{b}</button>)}
+                </div>
+              </div>
+            )}
+            <div class="deux">
+              <div class="champ" data-champ="nom">
+                <label for={`${id}-nom`}>Nom et prénom</label>
+                <input id={`${id}-nom`} name="nom" autocomplete="name" maxlength="80" required>
+                <span class="erreur">Indiquez votre nom.</span>
+              </div>
+              <div class="champ" data-champ="tel">
+                <label for={`${id}-tel`}>Téléphone / WhatsApp</label>
+                <div class="telephone"><span>+237</span><input id={`${id}-tel`} name="tel" inputmode="tel" autocomplete="tel-national" maxlength="12" placeholder="6XX XX XX XX" required></div>
+                <span class="erreur">9 chiffres, en commençant par 6.</span>
+              </div>
             </div>
-          </>}
-          {besoins.length > 0 && (
-            <div class="champ" data-champ="besoins">
-              <span class="titre-champ" id={`${id}-besoins`}>Votre besoin <span class="facultatif">(plusieurs choix possibles)</span></span>
+            <div class="deux">
+              <div class="champ" data-champ="lieu">
+                <label for={`${id}-lieu`}>Quartier et ville <span class="facultatif">(facultatif)</span></label>
+                <input id={`${id}-lieu`} name="lieu" autocomplete="address-level2" maxlength="120" placeholder="Par exemple : Messassi, Yaoundé">
+              </div>
+              <div class="champ" data-champ="email">
+                <label for={`${id}-email`}>E-mail <span class="facultatif">(facultatif)</span></label>
+                <input id={`${id}-email`} name="email" type="email" autocomplete="email" maxlength="120">
+                <span class="erreur">Cette adresse e-mail n'est pas valide.</span>
+              </div>
+            </div>
+            <div class="champ" data-champ="moment">
+              <span class="titre-champ" id={`${id}-moment`}>Meilleur moment pour vous rappeler <span class="facultatif">(facultatif)</span></span>
+              <div class="choix" role="radiogroup" aria-labelledby={`${id}-moment`} data-choix="moment" data-unique>
+                {moments.map(m => <button type="button" role="radio" aria-checked="false" data-valeur={m}>{m}</button>)}
+              </div>
+            </div>
+            <div class="champ" data-champ="message">
+              <label for={`${id}-message`}>Un détail à ajouter ? <span class="facultatif">(facultatif)</span></label>
+              <textarea id={`${id}-message`} name="message" maxlength="1500"></textarea>
+            </div>
+          </div>
+        )}
+
+        {variante === 'entreprises' && <>
+          <div class="etape" data-etape="1">
+            <div class="deux">
+              <div class="champ" data-champ="nom">
+                <label for={`${id}-nom`}>Votre prénom et nom</label>
+                <input id={`${id}-nom`} name="nom" autocomplete="name" maxlength="80" required>
+                <span class="erreur">Indiquez votre nom.</span>
+              </div>
+              <div class="champ" data-champ="organisation">
+                <label for={`${id}-organisation`}>Nom de votre entreprise</label>
+                <input id={`${id}-organisation`} name="organisation" autocomplete="organization" maxlength="120">
+                <span class="erreur">Indiquez le nom de votre entreprise.</span>
+              </div>
+            </div>
+            {[q('fonction_choix', 'Votre poste', postesEntreprise, { requis: true }),
+              q('secteur', "Secteur d'activité", secteurs, { requis: true }),
+              q('postes', "Nombre d'ordinateurs dans votre entreprise", parcs, { requis: true }),
+              q('connu', 'Comment avez-vous entendu parler de ZTi ?', connus, { facultatif: '(facultatif)' })].map(x => (
+              <div class="champ" data-champ={x.nom} data-requis={x.requis ? '' : undefined}>
+                <span class="titre-champ" id={`${id}-${x.nom}`}>{x.titre} {x.facultatif && <span class="facultatif">{x.facultatif}</span>}</span>
+                <div class="choix" role="radiogroup" aria-labelledby={`${id}-${x.nom}`} data-choix={x.nom} data-unique>
+                  {x.valeurs.map(v => <button type="button" role="radio" aria-checked="false" data-valeur={v}>{v}</button>)}
+                </div>
+                <span class="erreur">Choisissez une réponse.</span>
+              </div>
+            ))}
+            <p class="message-erreur" role="alert" hidden></p>
+            <div><button class="btn" type="button" data-suivant>Continuer<span class="pastille"><Icone nom="fleche" /></span></button></div>
+          </div>
+          <div class="etape" data-etape="2" hidden>
+            <button type="button" class="retour" data-retour>← Étape précédente</button>
+            {[q('situation', 'Quelle situation décrit le mieux votre informatique en ce moment ?', situations, { requis: true, liste: true })].map(x => (
+              <div class="champ" data-champ={x.nom} data-requis>
+                <span class="titre-champ" id={`${id}-${x.nom}`}>{x.titre}</span>
+                <div class="choix choix-liste" role="radiogroup" aria-labelledby={`${id}-${x.nom}`} data-choix={x.nom} data-unique>
+                  {x.valeurs.map(v => <button type="button" role="radio" aria-checked="false" data-valeur={v}>{v}</button>)}
+                </div>
+                <span class="erreur">Choisissez une réponse.</span>
+              </div>
+            ))}
+            <div class="champ" data-champ="message">
+              <label for={`${id}-message`}>Qu'est-ce qui vous a poussé à faire cette demande aujourd'hui ? <span class="facultatif">(une ou deux phrases suffisent)</span></label>
+              <textarea id={`${id}-message`} name="message" maxlength="1500"></textarea>
+            </div>
+            {[q('accompagnement', "Quel type d'accompagnement vous correspond le mieux ?", accompagnements, { requis: true, liste: true }),
+              q('prestataire', 'Avez-vous déjà un prestataire informatique ?', prestataires, { requis: true, liste: true }),
+              q('depenses', "Ce que vous dépensez aujourd'hui pour vos problèmes informatiques (interventions, réparations, temps perdu)", depenses, { facultatif: '(facultatif)' })].map(x => (
+              <div class="champ" data-champ={x.nom} data-requis={x.requis ? '' : undefined}>
+                <span class="titre-champ" id={`${id}-${x.nom}`}>{x.titre} {x.facultatif && <span class="facultatif">{x.facultatif}</span>}</span>
+                <div class={`choix ${x.liste ? 'choix-liste' : ''}`} role="radiogroup" aria-labelledby={`${id}-${x.nom}`} data-choix={x.nom} data-unique>
+                  {x.valeurs.map(v => <button type="button" role="radio" aria-checked="false" data-valeur={v}>{v}</button>)}
+                </div>
+                <span class="erreur">Choisissez une réponse.</span>
+              </div>
+            ))}
+            <p class="message-erreur" role="alert" hidden></p>
+            <div><button class="btn" type="button" data-suivant>Continuer<span class="pastille"><Icone nom="fleche" /></span></button></div>
+          </div>
+          <div class="etape" data-etape="3" hidden>
+            <button type="button" class="retour" data-retour>← Étape précédente</button>
+            <div class="deux">
+              <div class="champ" data-champ="email" data-email-requis>
+                <label for={`${id}-email`}>Votre e-mail professionnel</label>
+                <input id={`${id}-email`} name="email" type="email" autocomplete="email" maxlength="120" required>
+                <span class="erreur">Indiquez une adresse e-mail valide.</span>
+              </div>
+              <div class="champ" data-champ="tel">
+                <label for={`${id}-tel`}>Votre numéro WhatsApp</label>
+                <div class="telephone"><span>+237</span><input id={`${id}-tel`} name="tel" inputmode="tel" autocomplete="tel-national" maxlength="12" placeholder="6XX XX XX XX" required></div>
+                <span class="erreur">9 chiffres, en commençant par 6.</span>
+              </div>
+            </div>
+            {[q('ville', 'Votre ville', villes), q('moment', 'Quand préférez-vous être contacté ?', moments)].map(x => (
+              <div class="champ" data-champ={x.nom} data-requis>
+                <span class="titre-champ" id={`${id}-${x.nom}`}>{x.titre}</span>
+                <div class="choix" role="radiogroup" aria-labelledby={`${id}-${x.nom}`} data-choix={x.nom} data-unique>
+                  {x.valeurs.map(v => <button type="button" role="radio" aria-checked="false" data-valeur={v}>{v}</button>)}
+                </div>
+                <span class="erreur">Choisissez une réponse.</span>
+              </div>
+            ))}
+          </div>
+        </>}
+
+        {variante === 'particuliers' && (
+          <div class="etape" data-etape="1">
+            <div class="champ" data-champ="besoins" data-requis-plusieurs>
+              <span class="titre-champ" id={`${id}-besoins`}>Votre problème <span class="facultatif">(plusieurs choix possibles)</span></span>
               <div class="choix" role="group" aria-labelledby={`${id}-besoins`} data-choix="besoins">
-                {besoins.map(b => <button type="button" aria-pressed="false" data-valeur={b}>{b}</button>)}
+                {problemes.map(b => <button type="button" aria-pressed="false" data-valeur={b}>{b}</button>)}
+              </div>
+              <span class="erreur">Choisissez au moins un problème.</span>
+            </div>
+            <div class="champ" data-champ="postes">
+              <span class="titre-champ" id={`${id}-postes`}>Votre appareil <span class="facultatif">(facultatif)</span></span>
+              <div class="choix" role="radiogroup" aria-labelledby={`${id}-postes`} data-choix="postes" data-unique>
+                {appareils.map(v => <button type="button" role="radio" aria-checked="false" data-valeur={v}>{v}</button>)}
               </div>
             </div>
-          )}
-          {!court && <>
-            <div class="champ" data-champ="accompagnement" data-requis>
-              <span class="titre-champ" id={`${id}-accompagnement`}>L'accompagnement qui vous correspond</span>
-              <div class="choix choix-liste" role="radiogroup" aria-labelledby={`${id}-accompagnement`} data-choix="accompagnement" data-unique>
-                {accompagnements.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
-              </div>
-              <span class="erreur">Choisissez une réponse.</span>
+            <div class="champ" data-champ="message">
+              <label for={`${id}-message`}>Décrivez ce qui se passe <span class="facultatif">(facultatif)</span></label>
+              <textarea id={`${id}-message`} name="message" maxlength="1500" placeholder="Par exemple : mon ordinateur portable met 10 minutes à démarrer depuis une semaine."></textarea>
             </div>
-            <div class="champ" data-champ="prestataire">
-              <span class="titre-champ" id={`${id}-prestataire`}>Avez-vous déjà un prestataire informatique ? <span class="facultatif">(facultatif)</span></span>
-              <div class="choix" role="radiogroup" aria-labelledby={`${id}-prestataire`} data-choix="prestataire" data-unique>
-                {prestataires.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
+            <div class="deux">
+              <div class="champ" data-champ="nom">
+                <label for={`${id}-nom`}>Nom et prénom</label>
+                <input id={`${id}-nom`} name="nom" autocomplete="name" maxlength="80" required>
+                <span class="erreur">Indiquez votre nom.</span>
               </div>
-            </div>
-            <div class="champ" data-champ="depenses">
-              <span class="titre-champ" id={`${id}-depenses`}>Ce que vous dépensez aujourd'hui pour vos problèmes informatiques <span class="facultatif">(réparations et temps perdu compris, facultatif)</span></span>
-              <div class="choix" role="radiogroup" aria-labelledby={`${id}-depenses`} data-choix="depenses" data-unique>
-                {depenses.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
+              <div class="champ" data-champ="tel">
+                <label for={`${id}-tel`}>Téléphone / WhatsApp</label>
+                <div class="telephone"><span>+237</span><input id={`${id}-tel`} name="tel" inputmode="tel" autocomplete="tel-national" maxlength="12" placeholder="6XX XX XX XX" required></div>
+                <span class="erreur">9 chiffres, en commençant par 6.</span>
               </div>
             </div>
-          </>}
-          <div class="champ" data-champ="message">
-            <label for={`${id}-message`}>{court ? 'Votre message' : "Qu'est-ce qui vous pousse à faire cette demande aujourd'hui ?"} <span class="facultatif">(facultatif{court ? '' : ', une ou deux phrases suffisent'})</span></label>
-            <textarea id={`${id}-message`} name="message" maxlength="1500"></textarea>
+            <div class="deux">
+              <div class="champ" data-champ="lieu">
+                <label for={`${id}-lieu`}>Quartier et ville <span class="facultatif">(facultatif)</span></label>
+                <input id={`${id}-lieu`} name="lieu" autocomplete="address-level2" maxlength="120" placeholder="Par exemple : Messassi, Yaoundé">
+              </div>
+              <div class="champ" data-champ="email">
+                <label for={`${id}-email`}>E-mail <span class="facultatif">(facultatif)</span></label>
+                <input id={`${id}-email`} name="email" type="email" autocomplete="email" maxlength="120">
+                <span class="erreur">Cette adresse e-mail n'est pas valide.</span>
+              </div>
+            </div>
+            <div class="champ" data-champ="moment">
+              <span class="titre-champ" id={`${id}-moment`}>Meilleur moment pour vous rappeler <span class="facultatif">(facultatif)</span></span>
+              <div class="choix" role="radiogroup" aria-labelledby={`${id}-moment`} data-choix="moment" data-unique>
+                {moments.map(m => <button type="button" role="radio" aria-checked="false" data-valeur={m}>{m}</button>)}
+              </div>
+            </div>
           </div>
-          {!court && <p class="message-erreur" role="alert" hidden></p>}
-          {!court && <div><button class="btn" type="button" data-suivant>Continuer<span class="pastille"><Icone nom="fleche" /></span></button></div>}
-        </div>
+        )}
 
-        <div class="etape" data-etape="2" hidden={!court}>
-          {!court && <button type="button" class="retour" data-retour>← Modifier ma situation</button>}
-          <div class="champ" data-champ="organisation">
-            <label for={`${id}-organisation`}>Nom de l'établissement ou de l'entreprise</label>
-            <input id={`${id}-organisation`} name="organisation" autocomplete="organization" maxlength="120">
-            <span class="erreur">Indiquez le nom de votre établissement ou de votre entreprise.</span>
-          </div>
-          {!court && (
-            <div class="champ" data-champ="secteur">
-              <span class="titre-champ" id={`${id}-secteur`}>Secteur d'activité <span class="facultatif">(facultatif)</span></span>
-              <div class="choix" role="radiogroup" aria-labelledby={`${id}-secteur`} data-choix="secteur" data-unique>
-                {secteurs.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
-              </div>
-            </div>
-          )}
-          <div class="deux">
-            <div class="champ" data-champ="nom">
-              <label for={`${id}-nom`}>Nom et prénom</label>
-              <input id={`${id}-nom`} name="nom" autocomplete="name" maxlength="80" required>
-              <span class="erreur">Indiquez votre nom.</span>
-            </div>
-            <div class="champ" data-champ="fonction">
-              <label for={`${id}-fonction`}>Fonction <span class="facultatif">(facultatif)</span></label>
-              <input id={`${id}-fonction`} name="fonction" autocomplete="organization-title" maxlength="80" placeholder="Directeur, DG, gérant…">
-            </div>
-          </div>
-          <div class="deux">
-            <div class="champ" data-champ="tel">
-              <label for={`${id}-tel`}>Téléphone / WhatsApp</label>
-              <div class="telephone"><span>+237</span><input id={`${id}-tel`} name="tel" inputmode="tel" autocomplete="tel-national" maxlength="12" placeholder="6XX XX XX XX" required></div>
-              <span class="erreur">9 chiffres, en commençant par 6.</span>
-            </div>
-            <div class="champ" data-champ="email">
-              <label for={`${id}-email`}>E-mail <span class="facultatif">(facultatif)</span></label>
-              <input id={`${id}-email`} name="email" type="email" autocomplete="email" maxlength="120">
-              <span class="erreur">Cette adresse e-mail n'est pas valide.</span>
-            </div>
-          </div>
-          <div class="champ" data-champ="lieu">
-            <label for={`${id}-lieu`}>Quartier et ville <span class="facultatif">(facultatif)</span></label>
-            <input id={`${id}-lieu`} name="lieu" autocomplete="address-level2" maxlength="120" placeholder="Par exemple : Messassi, Yaoundé">
-          </div>
-          <div class="champ" data-champ="moment">
-            <span class="titre-champ" id={`${id}-moment`}>Meilleur moment pour vous rappeler <span class="facultatif">(facultatif)</span></span>
-            <div class="choix" role="radiogroup" aria-labelledby={`${id}-moment`} data-choix="moment" data-unique>
-              {moments.map(m => <button type="button" role="radio" aria-checked="false" data-valeur={m}>{m}</button>)}
-            </div>
-          </div>
-          {!court && (
-            <div class="champ" data-champ="connu">
-              <span class="titre-champ" id={`${id}-connu`}>Comment avez-vous connu ZTi ? <span class="facultatif">(facultatif)</span></span>
-              <div class="choix" role="radiogroup" aria-labelledby={`${id}-connu`} data-choix="connu" data-unique>
-                {connus.map(t => <button type="button" role="radio" aria-checked="false" data-valeur={t}>{t}</button>)}
-              </div>
-            </div>
-          )}
+        <div class="etape-fin" data-fin hidden={etapes.length > 1}>
           <div class="piege" aria-hidden="true"><label>Ne pas remplir<input name="site_web" tabindex="-1" autocomplete="off"></label></div>
           <div class="champ" data-champ="accord">
             <button type="button" class="case" role="checkbox" aria-checked="false" data-case="accord">

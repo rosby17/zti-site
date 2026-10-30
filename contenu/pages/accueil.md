@@ -41,8 +41,8 @@ sections:
       - titre: Particuliers
         image: /images/public-particuliers.webp
         texte: "Un ordinateur qui ralentit, un virus, des fichiers à sauver : décrivez votre besoin."
-        lien: /contact/
-        lien_texte: Nous écrire
+        lien: /offres/particuliers/
+        lien_texte: Décrire mon problème
   - type: services
     fond: blanc
     etiquette: Nos services
@@ -117,6 +117,7 @@ sections:
     titre: Demandez votre diagnostic.
     texte: "Décrivez votre besoin : ZTi vous recontacte au moment choisi."
     sujet: Demande de diagnostic
+    formulaire: general
     garanties: [Offert, Sans engagement, Vous restez l'unique décideur]
     bouton: Envoyer ma demande
 ---
