@@ -110,3 +110,38 @@ a.reseau:hover, a.reseau:focus-visible { background: rgba(21,101,255,.18); borde
 .reseau.bientot small { color: #AEB6D6; }
 @media (max-width: 900px) { .reseaux-grille { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .reseaux-grille { grid-template-columns: 1fr; } }
+
+/* ——— diagnostic en ligne (particuliers) ——— */
+.diagnostic { max-width: 900px; margin: 30px auto 0; }
+.diag-progres { height: 6px; border-radius: 99px; background: #E6EBF8; overflow: hidden; }
+.diag-progres span { display: block; height: 100%; width: 25%; background: var(--degrade); border-radius: 99px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
+.diag-question { font-size: clamp(20px, 2.4vw, 26px); color: var(--logo); margin: 4px 0 2px; }
+.diag-cartes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.diag-carte { display: grid; justify-items: center; align-content: center; gap: 12px; min-height: 132px; padding: 18px 12px; border-radius: 18px; cursor: pointer;
+  border: 1px solid #E1E6F3; background: #F7F8FC; color: var(--logo); font: 600 15px/1.3 var(--boutons); text-align: center;
+  transition: transform .2s, box-shadow .2s, border-color .2s, background-color .2s; }
+.diag-carte svg { width: 38px; height: 38px; color: #1565FF; transition: transform .2s; }
+.diag-carte:hover { transform: translateY(-3px); border-color: rgba(21,101,255,.45); box-shadow: 0 16px 32px rgba(21,101,255,.14); background: #fff; }
+.diag-carte:hover svg { transform: scale(1.08); }
+.diag-carte[aria-checked="true"] { background: var(--degrade); color: #fff; border-color: transparent; box-shadow: 0 16px 32px rgba(21,101,255,.3); }
+.diag-carte[aria-checked="true"] svg { color: #fff; }
+.diag-liste { display: grid; gap: 10px; }
+.diag-ligne { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.diag-option { text-align: left; padding: 15px 18px; border-radius: 14px; border: 1px solid #E1E6F3; background: #F7F8FC; color: #0A0D3A; font: 500 15px var(--boutons); cursor: pointer; transition: border-color .15s, background-color .15s; }
+.diag-option:hover { border-color: #1565FF; background: #fff; }
+.diag-option[aria-checked="true"] { background: var(--degrade); color: #fff; border-color: transparent; }
+.diag-detail { display: grid; gap: 14px; }
+.diag-avis { border-radius: 18px; padding: 20px 22px; background: linear-gradient(180deg, #EEF3FF, #F7F9FF); border: 1px solid #D9E3FF; display: grid; gap: 10px; }
+.diag-avis-titre { display: inline-flex; align-items: center; gap: 8px; font: 700 13px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: #1565FF; }
+.diag-avis-titre svg { width: 16px; height: 16px; }
+.diag-avis p, .diag-avis ul { margin: 0; }
+.diag-avis b { color: #02008A; }
+.diag-priorite { background: #FFF4E0; color: #8A5300; border-radius: 10px; padding: 8px 12px; font-weight: 600; }
+.diag-eviter { list-style: none; padding: 0; display: grid; gap: 8px; }
+.diag-eviter li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+.diag-eviter li::before { content: '×'; width: 22px; height: 22px; border-radius: 50%; background: #FDECEC; color: #C03030; display: grid; place-items: center; font-weight: 700; line-height: 1; }
+@media (max-width: 860px) { .diag-cartes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .diag-carte { min-height: 112px; font-size: 14px; } }
+.diag-detail[hidden], .diagnostic [data-avis][hidden], .diagnostic .etape[hidden] { display: none; }
+.formulaire .diag-question, .sombre .formulaire .diag-question { color: #02008A; }
+.sombre .formulaire .diag-avis b { color: #02008A; }

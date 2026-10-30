@@ -227,6 +227,16 @@ components:
           - { name: etiquette, type: string, label: Petit titre }
           - { name: titre, type: string, label: Titre }
           - { name: texte, component: texte }
+      - name: diagnostic
+        label: Diagnostic en ligne (particuliers)
+        fields:
+          - { name: fond, component: fond }
+          - { name: ancre, component: ancre, description: "Laissez « demande » : les boutons « #demande » mènent ici." }
+          - { name: etiquette, type: string, label: Petit titre }
+          - { name: titre, type: string, label: Titre }
+          - { name: texte, component: texte }
+          - { name: sujet, type: string, label: Sujet de la demande }
+          - { name: bouton, type: string, label: Texte du bouton d'envoi }
       - name: demande
         label: Formulaire de demande
         fields:
