@@ -31,6 +31,9 @@ publique.use('*', async (c, next) => {
   await next();
 });
 
+// page du site sous la même forme que dans les visites : « accueil » → « / », « offres/audit-pme » → « /offres/audit-pme/ »
+const cheminPage = p => { p = texte(p, 200).replace(/^\/?zti-site/, ''); if (!p || p === 'accueil' || p === '/') return '/'; return ('/' + p.replace(/^\/+|\/+$/g, '') + '/'); };
+
 // lit le corps JSON (envoyé en application/json ou en text/plain par sendBeacon), 20 Ko au plus
 async function corps(c) {
   const brut = await c.req.text();
@@ -68,7 +71,7 @@ publique.post('/demandes', async c => {
     nom, fonction: texte(d.fonction, 80), tel, email, lieu: texte(d.lieu, 120), postes: texte(d.postes, 30),
     situation: texte(d.situation, 160), besoins, accompagnement: texte(d.accompagnement, 160), prestataire: texte(d.prestataire, 80),
     depenses: texte(d.depenses, 60), moment: texte(d.moment, 30), message: texte(d.message, 1500), connu: texte(d.connu, 60),
-    page: texte(d.page, 200), campagne: texte(d.campagne, 80), referent: domaine(d.referent),
+    page: cheminPage(d.page), campagne: texte(d.campagne, 80), referent: domaine(d.referent),
     ...Object.fromEntries(UTM.map(k => [k, texte(d[k], 120)])),
     visiteur: empreinteVisiteur(c),
   };
@@ -107,7 +110,7 @@ publique.post('/avis', async c => {
   if (avisTexte.length < 10) erreurs.push('texte');
   if (d.accord !== true) erreurs.push('accord');
   if (erreurs.length) return c.json({ erreur: 'Informations manquantes ou incorrectes.', champs: erreurs }, 400);
-  const f = { note, nom, organisation: texte(d.organisation, 120), texte: avisTexte, tel: texte(d.tel, 30), page: texte(d.page, 200) };
+  const f = { note, nom, organisation: texte(d.organisation, 120), texte: avisTexte, tel: texte(d.tel, 30), page: cheminPage(d.page) };
   await sql`insert into avis ${sql(f)}`;
   await enregistrerEvenement(c, 'avis', { chemin: f.page || '/' });
   alerter('avis', `Nouvel avis (${note}/5) — ${nom}`, [avisTexte, `— ${nom}${f.organisation ? ', ' + f.organisation : ''}`, '',

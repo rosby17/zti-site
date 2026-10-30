@@ -412,7 +412,7 @@ content:
         type: object
         label: Demandes et mesure d'audience
         fields:
-          - { name: endpoint, type: string, label: Adresse du script Google (…/exec), description: "Les demandes et les avis arrivent dans le CRM Notion de ZTi (copie dans le Google Sheet, et e-mail). Vide = la demande part seulement par WhatsApp." }
+          - { name: endpoint, type: string, label: Adresse du serveur ZTi, description: "Ex. https://api.ztisystem.com. Demandes, avis, statistiques, téléchargements et espace ambassadeurs passent par ce serveur. Vide = la demande part seulement par WhatsApp." }
           - { name: pixel, type: string, label: Identifiant du pixel Meta, description: "Vide = aucun pixel chargé." }
 
   - name: references

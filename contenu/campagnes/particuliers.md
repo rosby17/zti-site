@@ -57,6 +57,14 @@ sections:
         texte: "Rien n'est fait sans votre accord. Vous restez l'unique décideur."
       - titre: Le suivi
         texte: "Un suivi de deux semaines après chaque intervention : si quelque chose ne va pas, ZTi revient."
+  - type: texte_image
+    fond: ivoire
+    etiquette: Assistance à distance
+    titre: Souvent, ZTi peut vous dépanner sans se déplacer.
+    texte: "Téléchargez AnyDesk, donnez-nous le code affiché : vous voyez tout ce que fait ZTi et vous pouvez arrêter à tout moment."
+    bouton:
+      texte: Voir les logiciels d'assistance
+      lien: /telechargements/
   - type: references
     fond: ivoire
     etiquette: Nos références

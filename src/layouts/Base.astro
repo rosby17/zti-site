@@ -24,9 +24,10 @@ const desc = description || r.description;
 const adresse = new URL(Astro.url.pathname, Astro.site).href;
 const apercu = new URL(lien(image || '/images/partage.jpg'), Astro.site).href;
 const pixel = (r.mesures?.pixel || '').trim();
+const serveur = (r.mesures?.endpoint || '').trim().replace(/\/$/, '');
 ---
 <!doctype html>
-<html lang="fr" class="sans-js">
+<html lang="fr" class="sans-js" data-serveur={serveur}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -23,6 +23,7 @@ const etoiles = (n: number) => '★★★★★'.slice(0, n) + '☆☆☆☆☆'
         ))}
       </div>
     )}
+    <div class="liste-avis" data-avis-serveur hidden></div>
     <details class="donner-avis rv" open={liste.length === 0 ? true : undefined}>
       <summary class="btn">Donner mon avis<span class="pastille"><Icone nom="plus" /></span></summary>
       <form class="formulaire" novalidate data-avis data-endpoint={(r.mesures?.endpoint || '').trim()} data-wa={r.contact.whatsapp} data-page={page}>

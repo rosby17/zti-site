@@ -1,0 +1,84 @@
+---
+// Téléchargements : logiciels d'assistance à distance (liens officiels des éditeurs) et outils créés par ZTi.
+// La liste vient du catalogue du tableau de bord (serveur de ZTi) ; sans serveur, les logiciels d'assistance restent affichés.
+import Base from '../layouts/Base.astro';
+import Icone from '../components/Icone.astro';
+import { reglages } from '../lib/contenu';
+const r = await reglages();
+const assistance = [
+  { nom: 'AnyDesk', resume: "Pour que ZTi prenne la main sur votre ordinateur à distance, avec votre accord. Donnez-nous le code affiché.", lien: 'https://anydesk.com/fr/downloads', systeme: 'Windows, macOS, Android, iPhone' },
+  { nom: 'RustDesk', resume: "Logiciel d'assistance à distance gratuit et libre.", lien: 'https://rustdesk.com/fr/', systeme: 'Windows, macOS, Linux, Android' },
+  { nom: 'TeamViewer QuickSupport', resume: "Version simple de TeamViewer pour recevoir de l'aide à distance.", lien: 'https://www.teamviewer.com/fr/telechargement/', systeme: 'Windows, macOS, Android, iPhone' },
+];
+const wa = r.contact.whatsapp.replace(/\D/g, '');
+---
+<Base titre="Téléchargements" description="Logiciels d'assistance à distance pour être dépanné par ZTi, et outils créés par ZTi pour les problèmes du Cameroun.">
+  <section class="section fond-nuit sombre accroche sans-image">
+    <div class="contenu">
+      <div class="grille"><div>
+        <ul class="pastilles"><li>Assistance à distance</li><li>Outils ZTi</li></ul>
+        <h1>Téléchargements</h1>
+        <div class="chapo"><p>Les logiciels pour que ZTi vous dépanne à distance, et les outils créés par ZTi pour les problèmes du Cameroun.</p></div>
+      </div></div>
+    </div>
+  </section>
+
+  <section class="section fond-blanc" id="assistance">
+    <div class="contenu">
+      <span class="etiquette">Assistance à distance</span>
+      <h2>ZTi vous dépanne sans se déplacer.</h2>
+      <ol class="etapes-assistance">
+        <li><b>Téléchargez un des logiciels ci-dessous</b><span>AnyDesk est le plus simple.</span></li>
+        <li><b>Ouvrez-le et donnez-nous le code affiché</b><span>Par téléphone ou par WhatsApp.</span></li>
+        <li><b>Vous voyez tout ce que fait ZTi</b><span>Vous pouvez arrêter à tout moment, d'un clic.</span></li>
+      </ol>
+      <div class="grille-telechargements" data-telechargements="assistance">
+        {assistance.map(l => (
+          <article class="carte telechargement">
+            <h3>{l.nom}</h3><p>{l.resume}</p><span class="systeme">{l.systeme}</span>
+            <a class="btn" href={l.lien} target="_blank" rel="noopener">Télécharger<span class="pastille"><Icone nom="fleche" /></span></a>
+          </article>
+        ))}
+      </div>
+      <div class="actions"><a class="lien" href={`https://wa.me/${wa}?text=${encodeURIComponent("Bonjour ZTi, j'ai besoin d'une assistance à distance.")}`} target="_blank" rel="noopener">Demander une assistance sur WhatsApp<Icone nom="fleche" /></a></div>
+    </div>
+  </section>
+
+  <section class="section fond-ivoire" id="outils" data-section-outils hidden>
+    <div class="contenu">
+      <span class="etiquette">Outils créés par ZTi</span>
+      <h2>Des outils faits au Cameroun, pour les problèmes du Cameroun.</h2>
+      <div class="grille-telechargements" data-telechargements="outil"></div>
+    </div>
+  </section>
+</Base>
+
+<script is:inline define:vars={{ wa }}>
+// remplit les listes avec le catalogue du serveur de ZTi (logiciels publiés dans le tableau de bord)
+(async () => {
+  const serveur = document.documentElement.dataset.serveur;
+  if (!serveur) return;
+  try {
+    const produits = await (await fetch(serveur + '/v1/produits?type=logiciel')).json();
+    if (!Array.isArray(produits)) return;
+    const carte = p => {
+      const a = document.createElement('article'); a.className = 'carte telechargement';
+      const h = document.createElement('h3'); h.textContent = p.nom;
+      const t = document.createElement('p'); t.textContent = p.resume;
+      const s = document.createElement('span'); s.className = 'systeme'; s.textContent = [p.systeme, p.version && 'version ' + p.version].filter(Boolean).join(' · ');
+      const b = document.createElement('a'); b.className = 'btn';
+      if (!p.disponible) { b.textContent = 'Bientôt disponible'; b.setAttribute('aria-disabled', 'true'); b.className = 'btn indisponible'; }
+      else if (p.prix) { b.textContent = 'Obtenir — ' + Number(p.prix).toLocaleString('fr-FR') + ' F'; b.href = 'https://wa.me/' + wa + '?text=' + encodeURIComponent('Bonjour ZTi, je souhaite obtenir « ' + p.nom + ' ».'); b.target = '_blank'; b.rel = 'noopener'; }
+      else { b.textContent = 'Télécharger'; b.href = serveur + '/v1/telecharger/' + encodeURIComponent(p.slug); if (p.externe) { b.target = '_blank'; b.rel = 'noopener'; } }
+      if (!p.prix && p.disponible) { const gratuit = document.createElement('span'); gratuit.className = 'gratuit'; gratuit.textContent = 'Gratuit'; a.append(gratuit); }
+      a.append(h, t, s, b); return a;
+    };
+    for (const zone of document.querySelectorAll('[data-telechargements]')) {
+      const liste = produits.filter(p => (zone.dataset.telechargements === 'assistance') === (p.categorie === 'assistance'));
+      if (!liste.length) continue;
+      zone.replaceChildren(...liste.map(carte));
+      zone.closest('[data-section-outils]')?.removeAttribute('hidden');
+    }
+  } catch (_) { /* serveur injoignable : la liste écrite dans la page reste */ }
+})();
+</script>

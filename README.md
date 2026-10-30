@@ -21,15 +21,18 @@ Plan complet et étapes suivantes : [PLAN.md](PLAN.md).
 Pour suivre une publicité : ajouter à la fin du lien `?utm_source=facebook&utm_campaign=<nom de la pub>`.
 Ces informations arrivent avec chaque demande dans le CRM Notion.
 
-## Les demandes
+## Les demandes, le suivi des clients et le tableau de bord
 
-Le formulaire a deux étapes : la situation (nombre d'ordinateurs, urgence, prestataire, dépenses…, questions reprises de
-l'ancien formulaire Tally), puis les coordonnées. Chaque demande (et chaque avis) part dans le **CRM Notion** de ZTi, avec
-une copie de secours dans un Google Sheet et un e-mail à ZTi, avec la page, la campagne et la source de la publicité.
-Aucun outil intermédiaire : le relais est le script gratuit [outils/google-apps-script.gs](outils/google-apps-script.gs).
-Installation pas à pas : [outils/NOTION.md](outils/NOTION.md), puis coller l'adresse « …/exec » dans **Réglages du site**.
-Tant que cette adresse est vide, le visiteur voit « Dernière étape : envoyez votre demande à ZTi » et l'envoie par WhatsApp
-(le message est déjà rédigé).
+Le site (pages fixes, Cloudflare Pages ou GitHub Pages) envoie tout au **serveur de ZTi** (dossier `serveur/`, hébergé
+sur Coolify) : demandes des quatre formulaires (général, écoles, entreprises en 3 étapes, diagnostic en ligne des
+particuliers), avis, mesure d'audience maison (sans cookie), téléchargements et espace ambassadeurs.
+L'adresse du serveur se règle dans **Réglages du site › Adresse du serveur ZTi**. Tant qu'elle est vide, la demande part
+par WhatsApp (message déjà rédigé).
+
+- Tableau de bord de l'équipe : `<serveur>/admin/` (suivi des clients, comportement des visiteurs, campagnes, avis,
+  ambassadeurs, catalogue, équipe, e-mails).
+- Espace ambassadeurs : `<serveur>/espace/` (lien de recommandation `?ref=code`, points, récompenses).
+- Détails techniques, sécurité et installation : [serveur/README.md](serveur/README.md).
 
 ## Pour le développeur
 

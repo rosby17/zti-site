@@ -12,6 +12,7 @@ const suivre = [
   ...(r.contact.whatsapp && !reseaux.some(x => icone(x.nom) === 'whatsapp') ? [{ nom: 'WhatsApp', adresse: `https://wa.me/${r.contact.whatsapp.replace(/\D/g, '')}`, icone: 'whatsapp' as any }] : []),
 ];
 const annee = new Date().getFullYear();
+const serveur = (r.mesures?.endpoint || '').trim().replace(/\/$/, '');
 ---
 <footer class="pied">
   <div class="contenu">
@@ -37,6 +38,8 @@ const annee = new Date().getFullYear();
           {!sansMenu && r.menu.map(m => <li><a href={lien(m.lien)}>{m.texte}</a></li>)}
           {sansMenu && <li><a href={lien('/')}>Découvrir ZTi</a></li>}
           <li><a href={lien('/#avis')}>Donner votre avis</a></li>
+          <li><a href={lien('/telechargements/')}>Téléchargements</a></li>
+          {serveur && <li><a href={serveur + '/espace/'}>Espace ambassadeurs</a></li>}
         </ul>
       </div>
       <div>

@@ -6,6 +6,7 @@ import Icone from '../components/Icone.astro';
 import Bouton from '../components/Bouton.astro';
 import { reglages, lien } from '../lib/contenu';
 const r = await reglages();
+const serveur = (r.mesures?.endpoint || '').trim().replace(/\/$/, '');
 const communaute = [
   { nom: 'ZTi sur Facebook', texte: 'Conseils, alertes virus, astuces pour faire durer vos ordinateurs.', adresse: r.communaute?.facebook },
   { nom: 'Communauté WhatsApp ZTi', texte: '« Parlons de vos problèmes IT » : posez vos questions, recevez conseils, alertes et offres.', adresse: r.communaute?.whatsapp },
@@ -43,6 +44,14 @@ const etapes = [
               </a>
             ))}
           </div>
+        </div>
+      )}
+
+      {serveur && (
+        <div class="merci-ambassadeur">
+          <h2 class="merci-sous-titre">Vous connaissez quelqu'un qui a besoin de ZTi ?</h2>
+          <p>Devenez ambassadeur : chaque personne recommandée vous rapporte des points, à échanger contre des services ZTi.</p>
+          <div class="actions"><a class="btn" href={serveur + '/espace/'}>Devenir ambassadeur<span class="pastille"><Icone nom="fleche" /></span></a></div>
         </div>
       )}
 

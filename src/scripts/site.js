@@ -74,6 +74,18 @@ $$('[data-calculateur]').forEach(root => {
 
 /* ---------- source de la visite (publicités) : gardée pendant la visite ---------- */
 const SOURCE = 'zti-source';
+const SERVEUR = document.documentElement.dataset.serveur || '';
+// code d'ambassadeur (?ref=…) : gardé 60 jours sur cet appareil, envoyé avec les demandes
+const PARRAIN = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('ref');
+    if (q && /^[a-z0-9-]{2,40}$/i.test(q)) localStorage.setItem('zti-parrain', JSON.stringify({ code: q.toLowerCase(), le: Date.now() }));
+    const p = JSON.parse(localStorage.getItem('zti-parrain') || 'null');
+    if (p && Date.now() - p.le < 60 * 864e5) return p.code;
+    localStorage.removeItem('zti-parrain');
+  } catch (_) { /* stockage indisponible */ }
+  return '';
+})();
 (() => {
   const q = new URLSearchParams(location.search);
   const champs = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'fbclid'];
@@ -150,7 +162,7 @@ $$('form[data-demande]').forEach(form => {
     const haut = form.getBoundingClientRect().top + scrollY - 90;
     if (scrollY > haut) window.scrollTo({ top: haut, behavior: 'smooth' });
     $('input:not([type=hidden]), button:not(.retour)', etapes[n])?.focus({ preventScroll: true });
-    if (n > 0) window.ztiMesurer?.('etape2');
+    if (n > 0) window.ztiMesurer?.('formulaire', { valeur: n + 1, cible: form.dataset.sujet });
   };
   $$('[data-suivant]', form).forEach(b => b.addEventListener('click', () => { if (controler(etapes[courante])) aller(courante + 1); }));
   $$('[data-retour]', form).forEach(b => b.addEventListener('click', () => aller(courante - 1)));
@@ -172,7 +184,7 @@ $$('form[data-demande]').forEach(form => {
       besoins: valeur('besoins'), accompagnement: valeur('accompagnement').join(''), prestataire: valeur('prestataire').join(''),
       depenses: valeur('depenses').join(''), moment: valeur('moment').join(''), message: v('message'), connu: valeur('connu').join(''),
       page: form.dataset.page || location.pathname, campagne: form.dataset.campagne || '', adresse: location.href.split('#')[0],
-      ...JSON.parse(sessionStorage.getItem(SOURCE) || '{}'),
+      ...JSON.parse(sessionStorage.getItem(SOURCE) || '{}'), parrain: PARRAIN,
     };
     const bouton = $('button[type="submit"]', form); bouton.disabled = true; envoi = true;
     let enregistree = false;
@@ -244,7 +256,10 @@ $$('form[data-avis]').forEach(form => {
     const bouton = $('button[type="submit"]', form); bouton.disabled = true; envoye = true;
     let enregistre = false;
     if (form.dataset.endpoint) {
-      try { await fetch(form.dataset.endpoint, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(d) }); enregistre = true; } catch (_) { /* réseau coupé : l'avis part par WhatsApp */ }
+      try {
+        const r = await fetch(form.dataset.endpoint.replace(/\/$/, '') + '/v1/avis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...d, accord: true }) });
+        enregistre = r.ok;
+      } catch (_) { /* réseau coupé : l'avis part par WhatsApp */ }
     }
     const merci = $('.avis-merci', form.parentElement);
     const texteWa = [`Bonjour ZTi, voici mon avis (${note}/5) :`, d.texte, `— ${d.nom}${d.organisation ? ', ' + d.organisation : ''}`].join('\n');
@@ -306,7 +321,7 @@ $$('form[data-diagnostic]').forEach(form => {
     if (scrollY > haut) window.scrollTo({ top: haut, behavior: 'smooth' });
     const cible = n === 1 ? $(`.diag-detail[data-pour="${CSS.escape(choix.probleme || '')}"] button, .diag-detail[data-pour="${CSS.escape(choix.probleme || '')}"] textarea`, form) : $('button:not(.retour), input', etapes[n]);
     cible?.focus({ preventScroll: true });
-    if (n === 1) window.ztiMesurer?.('etape2');
+    if (n > 0) window.ztiMesurer?.('formulaire', { valeur: n + 1, cible: form.dataset.sujet });
   };
   const signaler = texte => { erreurEtape.textContent = texte; erreurEtape.hidden = false; };
   // cartes et options : un seul choix par groupe ; certaines font avancer toutes seules
@@ -350,7 +365,7 @@ $$('form[data-diagnostic]').forEach(form => {
       tel: '+237 ' + chiffres.replace(/(\d)(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5'), email: v('email'), lieu: v('lieu'),
       postes: choix.appareil, situation: choix.detail || choix.probleme, besoins: [choix.probleme], moment: choix.moment || '', message: resume,
       page: form.dataset.page || location.pathname, campagne: form.dataset.campagne || '', adresse: location.href.split('#')[0],
-      ...JSON.parse(sessionStorage.getItem(SOURCE) || '{}'),
+      ...JSON.parse(sessionStorage.getItem(SOURCE) || '{}'), parrain: PARRAIN,
     };
     $('button[type="submit"]', form).disabled = true; envoi = true;
     const enregistree = form.dataset.endpoint ? await envoyerDemande(form.dataset.endpoint, d) : false;
@@ -363,3 +378,74 @@ $$('form[data-diagnostic]').forEach(form => {
     location.href = form.dataset.merci;
   });
 });
+
+/* ---------- avis publiés (validés par ZTi dans le tableau de bord) ---------- */
+$$('[data-avis-serveur]').forEach(async liste => {
+  if (!SERVEUR) return;
+  try {
+    const avis = await (await fetch(SERVEUR + '/v1/avis')).json();
+    if (!Array.isArray(avis) || !avis.length) return;
+    for (const a of avis) {
+      const carte = document.createElement('figure'); carte.className = 'carte avis-carte';
+      const etoiles = document.createElement('span'); etoiles.className = 'etoiles'; etoiles.setAttribute('role', 'img'); etoiles.setAttribute('aria-label', a.note + ' sur 5');
+      etoiles.textContent = '★★★★★'.slice(0, a.note) + '☆☆☆☆☆'.slice(0, 5 - a.note);
+      const texte = document.createElement('blockquote'); texte.textContent = a.texte;
+      const qui = document.createElement('figcaption'); const b = document.createElement('b'); b.textContent = a.nom; qui.append(b);
+      if (a.organisation) { const o = document.createElement('span'); o.textContent = a.organisation; qui.append(o); }
+      carte.append(etoiles, texte, qui); liste.append(carte);
+    }
+    liste.hidden = false;
+    liste.closest('.avis')?.querySelector('.donner-avis')?.removeAttribute('open');
+  } catch (_) { /* serveur injoignable : on garde la section telle quelle */ }
+});
+
+/* ---------- mesure d'audience maison (sans cookie) : pages, défilement, sections, clics, formulaires, sortie ---------- */
+(() => {
+  if (!SERVEUR || /bot|crawl|spider/i.test(navigator.userAgent)) return;
+  const chemin = location.pathname.replace(/^\/zti-site/, '') || '/';
+  const source = JSON.parse(sessionStorage.getItem(SOURCE) || '{}');
+  const envoyer = (evenement, extra = {}) => {
+    const corps = JSON.stringify({ evenement, chemin, referent: document.referrer, parrain: PARRAIN, ...source, ...extra });
+    if (!navigator.sendBeacon?.(SERVEUR + '/v1/visites', new Blob([corps], { type: 'text/plain' })))
+      fetch(SERVEUR + '/v1/visites', { method: 'POST', body: corps, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+  };
+  window.ztiMesurer = (evenement, extra) => envoyer(evenement === 'etape2' ? 'formulaire' : evenement, evenement === 'etape2' ? { valeur: 2, ...extra } : extra);
+  envoyer('vue');
+  // défilement : 25, 50, 75, 100 %
+  const paliers = [25, 50, 75, 100], atteints = new Set();
+  let max = 0;
+  const mesurerDefilement = () => {
+    const h = document.documentElement.scrollHeight - innerHeight;
+    max = Math.max(max, h > 0 ? Math.round(100 * scrollY / h) : 100);
+    for (const p of paliers) if (max >= p && !atteints.has(p)) { atteints.add(p); envoyer('defilement', { valeur: p }); }
+  };
+  addEventListener('scroll', () => requestAnimationFrame(mesurerDefilement), { passive: true });
+  // sections vues (ordre dans la page = valeur) : montre où les visiteurs décrochent
+  if ('IntersectionObserver' in window) {
+    const sections = $$('main section, body > section').filter(s => s.querySelector('h1, h2'));
+    const vues = new Set();
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting || vues.has(e.target)) return;
+      vues.add(e.target); io.unobserve(e.target);
+      const titre = (e.target.querySelector('.etiquette')?.textContent || e.target.querySelector('h1, h2').textContent).trim().slice(0, 70);
+      envoyer('section', { cible: titre, valeur: sections.indexOf(e.target) + 1 });
+    }), { threshold: .35 });
+    sections.forEach(s => io.observe(s));
+  }
+  // clics : boutons, WhatsApp, appels, réseaux
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a, button.btn, .diag-carte'); if (!a) return;
+    const href = a.getAttribute('href') || '';
+    const evenement = /wa\.me|whatsapp\.com/.test(href) ? (a.dataset.communaute ? 'communaute' : 'whatsapp') : href.startsWith('tel:') ? 'appel' : 'clic';
+    if (evenement === 'clic' && !a.matches('.btn, .lien, .diag-carte, .reseau, .entete nav a, .carte')) return;
+    envoyer(evenement, { cible: (a.getAttribute('aria-label') || a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 70) });
+  }, { capture: true });
+  // formulaire commencé (1re action dans un formulaire de la page)
+  $$('form[data-demande], form[data-diagnostic], form[data-avis]').forEach(f => f.addEventListener('pointerdown', () => envoyer('formulaire', { valeur: 1, cible: f.dataset.sujet || 'Avis' }), { once: true }));
+  // sortie : temps passé sur la page
+  const debut = Date.now();
+  let parti = false;
+  const sortie = () => { if (parti) return; parti = true; envoyer('sortie', { valeur: Math.round((Date.now() - debut) / 1000) }); };
+  addEventListener('pagehide', sortie);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') sortie(); });
+})();
