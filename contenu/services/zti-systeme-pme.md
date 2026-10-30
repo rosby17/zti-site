@@ -2,7 +2,7 @@
 titre: ZTi Système™ pour les PME
 accroche: L'informatique stable des entreprises. Stabilité · Sécurité · Continuité.
 resume: Un audit gratuit, puis une informatique fiable, sécurisée et silencieuse qui travaille pour vous.
-image: /images/dirigeant.jpg
+image: /images/pme-panne.webp
 publics: [entreprises]
 points:
   - Protéger vos données clients, fichiers de projets et informations financières
