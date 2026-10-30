@@ -129,3 +129,57 @@ dt { color: var(--gris); font-size: 13px; } dd { margin: 0; color: var(--encre);
 .erreur { background: #FDECEC; color: #A12A2A; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
 #toast { position: fixed; right: 20px; bottom: 20px; background: var(--encre); color: #fff; padding: 12px 18px; border-radius: 14px; box-shadow: 0 20px 40px rgba(0,0,0,.25); z-index: 50; max-width: 380px; }
 #toast.mauvais { background: var(--rouge); }
+
+/* ——— composants maison (aucun contrôle natif) ——— */
+.champ-groupe { display: grid; gap: 6px; }
+.champ-titre { font-weight: 600; font-size: 13px; color: var(--encre); }
+.menu-maison { position: relative; }
+.menu-maison-bouton { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer;
+  border: 1px solid var(--trait); background: #F7F8FC; border-radius: 12px; padding: 10px 12px; color: var(--encre); font-weight: 500; min-height: 42px; }
+.menu-maison-bouton:hover { border-color: #C7CFE6; }
+.menu-maison-bouton[aria-expanded="true"] { border-color: var(--vif); box-shadow: 0 0 0 3px rgba(21,101,255,.15); background: #fff; }
+.menu-maison-bouton[disabled] { opacity: .6; cursor: not-allowed; }
+.menu-maison-bouton .muet { color: var(--gris); }
+.chevron { width: 9px; height: 9px; border-right: 2px solid var(--logo); border-bottom: 2px solid var(--logo); transform: translateY(-2px) rotate(45deg); transition: transform .15s; flex: none; }
+[aria-expanded="true"] > .chevron { transform: translateY(2px) rotate(-135deg); }
+.icone-cal { width: 16px; height: 16px; flex: none; border: 2px solid var(--logo); border-radius: 4px; border-top-width: 5px; }
+.menu-maison-liste { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0; min-width: 220px; max-height: 280px; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+  background: #fff; border: 1px solid var(--trait); border-radius: 14px; box-shadow: 0 24px 48px rgba(10,13,58,.16); outline: none; }
+.menu-maison-liste li { padding: 9px 12px; border-radius: 10px; cursor: pointer; color: var(--encre); font-size: 14px; }
+.menu-maison-liste li.actif { background: #EEF2FF; }
+.menu-maison-liste li[aria-selected="true"] { color: var(--logo); font-weight: 600; }
+.menu-maison-liste li[aria-selected="true"]::after { content: ''; float: right; width: 6px; height: 11px; margin-top: 3px; border-right: 2px solid var(--vif); border-bottom: 2px solid var(--vif); transform: rotate(45deg); }
+.calendrier { position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; width: 300px; padding: 14px; background: #fff; border: 1px solid var(--trait); border-radius: 16px; box-shadow: 0 24px 48px rgba(10,13,58,.16); }
+.cal-tete { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-tete b { font-family: var(--titres); color: var(--encre); text-transform: capitalize; }
+.cal-nav { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--trait); background: #F7F8FC; color: var(--logo); font-size: 18px; cursor: pointer; }
+.cal-nav:hover { border-color: var(--vif); }
+.cal-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.cal-jour-nom { font-size: 11px; font-weight: 600; color: var(--gris); text-transform: uppercase; padding: 4px 0; }
+.cal-jour { aspect-ratio: 1; border: 0; border-radius: 10px; background: none; cursor: pointer; color: var(--encre); font-size: 13px; }
+.cal-jour:hover { background: #EEF2FF; }
+.cal-jour.aujourdhui { box-shadow: inset 0 0 0 1px var(--vif); color: var(--vif); font-weight: 600; }
+.cal-jour.choisi { background: var(--degrade); color: #fff; font-weight: 600; }
+.cal-pied { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--trait); }
+.interrupteur { display: inline-flex; align-items: center; gap: 12px; border: 0; background: none; padding: 4px 0; cursor: pointer; font-weight: 600; color: var(--encre); text-align: left; }
+.interrupteur .piste { width: 42px; height: 24px; border-radius: 999px; background: #D7DCEC; position: relative; flex: none; transition: background .2s; }
+.interrupteur .piste span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); transition: transform .2s; }
+.interrupteur[aria-checked="true"] .piste { background: var(--degrade); }
+.interrupteur[aria-checked="true"] .piste span { transform: translateX(18px); }
+.interrupteur[disabled] { opacity: .6; cursor: not-allowed; }
+.champ-mdp { position: relative; }
+.champ-mdp input { padding-right: 46px; }
+.oeil { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: 0; border-radius: 10px; background: none; cursor: pointer; }
+.oeil::before { content: ''; position: absolute; inset: 10px 7px; border: 2px solid var(--gris); border-radius: 50% / 60%; }
+.oeil::after { content: ''; position: absolute; left: 14px; top: 14px; width: 6px; height: 6px; border-radius: 50%; background: var(--gris); }
+.oeil[aria-pressed="true"]::before { border-color: var(--vif); } .oeil[aria-pressed="true"]::after { background: var(--vif); }
+.oeil:hover { background: #EEF2FF; }
+.voile { position: fixed; inset: 0; z-index: 60; background: rgba(1,0,56,.45); display: grid; place-items: center; padding: 20px; backdrop-filter: blur(3px); }
+.fenetre { width: min(440px, 100%); background: var(--carte); border-radius: 20px; padding: 24px; box-shadow: 0 40px 80px rgba(0,0,0,.3); display: grid; gap: 10px; }
+.fenetre p { margin: 0; color: var(--texte); }
+.actions.fin { justify-content: flex-end; margin-top: 8px; }
+.btn.rouge { background: var(--rouge); box-shadow: 0 8px 20px rgba(210,58,58,.25); }
+/* barres de défilement aux couleurs du site */
+* { scrollbar-width: thin; scrollbar-color: #C7CFE6 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: #C7CFE6; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; } ::-webkit-scrollbar-track { background: transparent; }
+.menu ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); }

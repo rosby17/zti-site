@@ -30,6 +30,161 @@ const pastilleEtat = e => h('span', { class: 'etiquette e-' + e }, nomEtat(e));
 const GENRES = [['note', 'Note'], ['appel', 'Appel'], ['whatsapp', 'WhatsApp'], ['email', 'E-mail'], ['visite', 'Visite sur place'], ['etat', 'Changement d\'état']];
 const nomGenre = g => (GENRES.find(x => x[0] === g) || [g, g])[1];
 
+// ——— composants maison (aucun contrôle natif du navigateur : règle du kit) ———
+let ouvert = null; // menu ou calendrier ouvert
+const fermerOuvert = () => { if (ouvert) { ouvert.fermer(); ouvert = null; } };
+document.addEventListener('click', e => { if (ouvert && !ouvert.el.contains(e.target)) fermerOuvert(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && ouvert) { const b = ouvert.bouton; fermerOuvert(); b?.focus(); } });
+let idUnique = 0;
+
+// menu déroulant : options = [[valeur, libellé], …] ; renvoie l'élément, avec .valeur
+function menu(options, { valeur = options[0]?.[0] ?? '', libelle = 'Choisir', onchange, desactive = false } = {}) {
+  const id = 'menu-' + (++idUnique);
+  const texte = h('span', {});
+  const bouton = h('button', { type: 'button', class: 'menu-maison-bouton', 'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-controls': id, 'aria-label': libelle, disabled: desactive || undefined },
+    texte, h('span', { class: 'chevron', 'aria-hidden': 'true' }));
+  const liste = h('ul', { class: 'menu-maison-liste', role: 'listbox', id, hidden: true, tabindex: -1 });
+  const el = h('div', { class: 'menu-maison' }, bouton, liste);
+  let courant = valeur, actif = 0;
+  const choisir = (v, notifier = true) => {
+    courant = v; texte.textContent = (options.find(o => o[0] === v) || options[0] || ['', ''])[1];
+    [...liste.children].forEach(li => li.setAttribute('aria-selected', String(li.dataset.v === String(v))));
+    if (notifier) onchange?.(v);
+  };
+  const marquer = i => { actif = (i + options.length) % options.length; [...liste.children].forEach((li, k) => li.classList.toggle('actif', k === actif)); liste.children[actif]?.scrollIntoView({ block: 'nearest' }); };
+  options.forEach(([v, l], i) => liste.append(h('li', { role: 'option', 'data-v': String(v), onclick: () => { choisir(v); fermerOuvert(); bouton.focus(); }, onmousemove: () => marquer(i) }, l)));
+  const fermer = () => { liste.hidden = true; bouton.setAttribute('aria-expanded', 'false'); };
+  const ouvrir = () => { fermerOuvert(); liste.hidden = false; bouton.setAttribute('aria-expanded', 'true'); marquer(Math.max(0, options.findIndex(o => o[0] === courant))); liste.focus(); ouvert = { el, fermer, bouton }; };
+  bouton.addEventListener('click', e => { e.stopPropagation(); liste.hidden ? ouvrir() : fermerOuvert(); });
+  bouton.addEventListener('keydown', e => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); ouvrir(); } });
+  let saisie = '', minuteur;
+  liste.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); marquer(actif + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); marquer(actif - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); marquer(0); } else if (e.key === 'End') { e.preventDefault(); marquer(options.length - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(options[actif][0]); fermerOuvert(); bouton.focus(); }
+    else if (e.key === 'Tab') fermerOuvert();
+    else if (e.key.length === 1) { // aller à l'option qui commence par les lettres tapées
+      saisie += e.key.toLowerCase(); clearTimeout(minuteur); minuteur = setTimeout(() => { saisie = ''; }, 600);
+      const i = options.findIndex(o => String(o[1]).toLowerCase().startsWith(saisie)); if (i >= 0) marquer(i);
+    }
+  });
+  choisir(valeur, false);
+  Object.defineProperty(el, 'valeur', { get: () => courant });
+  return el;
+}
+
+// calendrier en français ; valeur 'AAAA-MM-JJ' ou '' ; renvoie l'élément, avec .valeur
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function calendrier({ valeur = '', libelle = 'Choisir une date', vide = 'Aucune date', desactive = false } = {}) {
+  let courant = valeur || '';
+  const texte = h('span', {});
+  const bouton = h('button', { type: 'button', class: 'menu-maison-bouton', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-label': libelle, disabled: desactive || undefined },
+    texte, h('span', { class: 'icone-cal', 'aria-hidden': 'true' }));
+  const panneau = h('div', { class: 'calendrier', role: 'dialog', 'aria-label': libelle, hidden: true });
+  const el = h('div', { class: 'menu-maison' }, bouton, panneau);
+  const afficherTexte = () => { texte.textContent = courant ? new Date(courant + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) : vide; texte.classList.toggle('muet', !courant); };
+  let vue = courant ? new Date(courant + 'T12:00') : new Date(), focus = new Date(vue);
+  const dessiner = () => {
+    const premier = new Date(vue.getFullYear(), vue.getMonth(), 1);
+    const decalage = (premier.getDay() + 6) % 7; // lundi en premier
+    const jours = new Date(vue.getFullYear(), vue.getMonth() + 1, 0).getDate();
+    const auj = iso(new Date());
+    const grille = h('div', { class: 'cal-grille', role: 'grid' },
+      ['lu', 'ma', 'me', 'je', 've', 'sa', 'di'].map(j => h('span', { class: 'cal-jour-nom', 'aria-hidden': 'true' }, j)),
+      Array.from({ length: decalage }, () => h('span', {})),
+      Array.from({ length: jours }, (_, i) => {
+        const d = new Date(vue.getFullYear(), vue.getMonth(), i + 1), v = iso(d);
+        return h('button', { type: 'button', class: 'cal-jour' + (v === courant ? ' choisi' : '') + (v === auj ? ' aujourdhui' : ''),
+          tabindex: v === iso(focus) ? 0 : -1, 'data-v': v, 'aria-label': d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+          'aria-pressed': String(v === courant), onclick: () => valider(v) }, i + 1);
+      }));
+    panneau.replaceChildren(
+      h('div', { class: 'cal-tete' },
+        h('button', { type: 'button', class: 'cal-nav', 'aria-label': 'Mois précédent', onclick: () => { vue = new Date(vue.getFullYear(), vue.getMonth() - 1, 1); focus = new Date(vue); dessiner(); } }, '‹'),
+        h('b', {}, MOIS[vue.getMonth()] + ' ' + vue.getFullYear()),
+        h('button', { type: 'button', class: 'cal-nav', 'aria-label': 'Mois suivant', onclick: () => { vue = new Date(vue.getFullYear(), vue.getMonth() + 1, 1); focus = new Date(vue); dessiner(); } }, '›')),
+      grille,
+      h('div', { class: 'cal-pied' },
+        h('button', { type: 'button', class: 'btn second petit', onclick: () => valider(iso(new Date())) }, 'Aujourd\'hui'),
+        h('button', { type: 'button', class: 'btn second petit', onclick: () => { const d = new Date(); d.setDate(d.getDate() + 7); valider(iso(d)); } }, 'Dans 7 jours'),
+        h('button', { type: 'button', class: 'btn second petit', onclick: () => valider('') }, 'Effacer')));
+  };
+  const valider = v => { courant = v; afficherTexte(); fermerOuvert(); bouton.focus(); };
+  const fermer = () => { panneau.hidden = true; bouton.setAttribute('aria-expanded', 'false'); };
+  bouton.addEventListener('click', e => {
+    e.stopPropagation(); if (!panneau.hidden) return fermerOuvert();
+    fermerOuvert(); vue = courant ? new Date(courant + 'T12:00') : new Date(); focus = new Date(vue); dessiner();
+    panneau.hidden = false; bouton.setAttribute('aria-expanded', 'true'); ouvert = { el, fermer, bouton };
+    panneau.querySelector('.cal-jour[tabindex="0"]')?.focus();
+  });
+  panneau.addEventListener('keydown', e => {
+    const pas = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+    if (!pas || !e.target.classList.contains('cal-jour')) return;
+    e.preventDefault(); focus = new Date(e.target.dataset.v + 'T12:00'); focus.setDate(focus.getDate() + pas);
+    if (focus.getMonth() !== vue.getMonth()) vue = new Date(focus.getFullYear(), focus.getMonth(), 1);
+    dessiner(); panneau.querySelector('.cal-jour[tabindex="0"]')?.focus();
+  });
+  afficherTexte();
+  Object.defineProperty(el, 'valeur', { get: () => courant });
+  return el;
+}
+
+// interrupteur (à la place d'une case à cocher)
+function interrupteur(libelle, { coche = false, desactive = false } = {}) {
+  const b = h('button', { type: 'button', role: 'switch', class: 'interrupteur', 'aria-checked': String(!!coche), disabled: desactive || undefined,
+    onclick: () => b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true')) }, h('span', { class: 'piste', 'aria-hidden': 'true' }, h('span', {})), libelle);
+  Object.defineProperty(b, 'coche', { get: () => b.getAttribute('aria-checked') === 'true' });
+  return b;
+}
+
+// libellé + commande maison (pas de <label> autour : il rouvrirait la liste à chaque clic)
+const champ = (titre, commande) => h('div', { class: 'champ-groupe', role: 'group', 'aria-label': titre }, h('span', { class: 'champ-titre' }, titre), commande);
+
+// champ de mot de passe avec l'œil
+function champMotDePasse(attrs = {}) {
+  const input = h('input', { type: 'password', ...attrs });
+  const oeil = h('button', { type: 'button', class: 'oeil', 'aria-label': 'Afficher le mot de passe', 'aria-pressed': 'false', onclick: () => {
+    const voir = input.type === 'password'; input.type = voir ? 'text' : 'password';
+    oeil.setAttribute('aria-pressed', String(voir)); oeil.setAttribute('aria-label', voir ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+  } });
+  const el = h('div', { class: 'champ-mdp' }, input, oeil);
+  Object.defineProperty(el, 'value', { get: () => input.value });
+  el.focus = () => input.focus();
+  return el;
+}
+
+// montant en F CFA (champ texte, chiffres seulement, espaces des milliers)
+function champMontant(valeur, attrs = {}) {
+  const input = h('input', { inputmode: 'numeric', autocomplete: 'off', placeholder: 'F CFA', ...attrs });
+  const formater = () => { const n = input.value.replace(/\D/g, '').slice(0, 12); input.value = n ? Number(n).toLocaleString('fr-FR') : ''; };
+  input.value = valeur == null || valeur === '' ? '' : String(valeur); formater();
+  input.addEventListener('input', formater);
+  Object.defineProperty(input, 'nombre', { get: () => { const n = input.value.replace(/\D/g, ''); return n ? Number(n) : null; } });
+  return input;
+}
+
+// fenêtre de confirmation maison (à la place de confirm()) : renvoie true ou false
+function confirmer({ titre, texte, bouton = 'Confirmer', danger = false }) {
+  return new Promise(resolve => {
+    const avant = document.activeElement;
+    const fin = ok => { voile.remove(); document.removeEventListener('keydown', clavier, true); avant?.focus?.(); resolve(ok); };
+    const annuler = h('button', { type: 'button', class: 'btn second', onclick: () => fin(false) }, 'Annuler');
+    const valider = h('button', { type: 'button', class: danger ? 'btn rouge' : 'btn', onclick: () => fin(true) }, bouton);
+    const fenetre = h('div', { class: 'fenetre', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'fenetre-titre', 'aria-describedby': 'fenetre-texte' },
+      h('h2', { id: 'fenetre-titre' }, titre), h('p', { id: 'fenetre-texte' }, texte), h('div', { class: 'actions fin' }, annuler, valider));
+    const voile = h('div', { class: 'voile', onclick: e => { if (e.target === voile) fin(false); } }, fenetre);
+    const clavier = e => {
+      if (e.key === 'Escape') { e.preventDefault(); fin(false); }
+      else if (e.key === 'Enter' && document.activeElement !== annuler) { e.preventDefault(); fin(true); }
+      else if (e.key === 'Tab') { const f = [annuler, valider]; const i = f.indexOf(document.activeElement); e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + 2) % 2].focus(); }
+    };
+    document.addEventListener('keydown', clavier, true);
+    document.body.append(voile); (danger ? annuler : valider).focus();
+  });
+}
+
 function toast(texte, mauvais = false) {
   const t = $('#toast'); t.textContent = texte; t.className = mauvais ? 'mauvais' : ''; t.hidden = false;
   clearTimeout(toast.minuteur); toast.minuteur = setTimeout(() => { t.hidden = true; }, 4000);
@@ -57,7 +212,7 @@ const essayer = async (fn, bouton) => {
 function afficherConnexion() {
   const erreur = h('p', { class: 'erreur', hidden: true });
   const email = h('input', { type: 'email', name: 'email', autocomplete: 'username', required: true });
-  const mdp = h('input', { type: 'password', name: 'mdp', autocomplete: 'current-password', required: true });
+  const mdp = champMotDePasse({ name: 'mdp', autocomplete: 'current-password', required: true });
   const bouton = h('button', { class: 'btn', type: 'submit' }, 'Se connecter');
   app.replaceChildren(h('div', { class: 'connexion' }, h('form', { class: 'carte', onsubmit: async e => {
     e.preventDefault(); erreur.hidden = true; bouton.disabled = true;
@@ -166,7 +321,7 @@ function barres(lignes) {
   if (!lignes.length) return h('p', { class: 'vide' }, 'Pas encore de données.');
   const max = Math.max(...lignes.map(l => l[1]), 1);
   return h('div', { class: 'liste-barres', style: 'margin-top:12px' }, lignes.map(([l, n]) =>
-    h('div', {}, h('div', { class: 'l' }, h('span', { title: l }, l), h('b', {}, nombre(n))), h('div', { class: 'barre' }, h('i', { style: `width:${100 * n / max}%` })))));
+    h('div', {}, h('div', { class: 'l' }, h('span', {}, l), h('b', {}, nombre(n))), h('div', { class: 'barre' }, h('i', { style: `width:${100 * n / max}%` })))));
 }
 function graphique(jours) {
   const L = 640, H = 220, m = 28;
@@ -200,8 +355,7 @@ async function vueDemandes() {
   const liste = await api('/demandes?' + params);
   const recherche = h('input', { type: 'search', placeholder: 'Nom, entreprise, téléphone, e-mail…', value: filtres.q, style: 'width:280px',
     onchange: e => { filtres.q = e.target.value.trim(); vueDemandes(); } });
-  const choixEtat = h('select', { style: 'width:180px', onchange: e => { filtres.etat = e.target.value; vueDemandes(); } },
-    h('option', { value: '' }, 'Tous les états'), ETATS.map(([v, l]) => h('option', { value: v, selected: filtres.etat === v || undefined }, l)));
+  const choixEtat = menu([['', 'Tous les états'], ...ETATS], { valeur: filtres.etat, libelle: 'Filtrer par état', onchange: v => { filtres.etat = v; vueDemandes(); } });
   const bascule = h('div', { class: 'onglets' },
     h('button', { type: 'button', 'aria-pressed': String(!vueListe), onclick: () => { vueListe = false; vueDemandes(); } }, 'Colonnes'),
     h('button', { type: 'button', 'aria-pressed': String(vueListe), onclick: () => { vueListe = true; vueDemandes(); } }, 'Liste'));
@@ -246,19 +400,19 @@ async function vueFiche(id) {
   const [{ fiche: f, notes }, equipe] = await Promise.all([api('/demandes/' + id), api('/equipe')]);
   const chiffres = (f.tel || '').replace(/\D/g, '');
   const ligne = (t, v) => v && (Array.isArray(v) ? v.length : true) ? [h('dt', {}, t), h('dd', {}, Array.isArray(v) ? v.join(', ') : v)] : null;
-  const etat = h('select', {}, ETATS.map(([v, l]) => h('option', { value: v, selected: f.etat === v || undefined }, l)));
-  const relance = h('input', { type: 'date', value: f.relance_le || '' });
-  const montant = h('input', { type: 'number', min: 0, step: 1000, value: f.montant ?? '', placeholder: 'F CFA' });
-  const responsable = h('select', {}, h('option', { value: '' }, 'Personne'), equipe.filter(m => m.actif !== false).map(m => h('option', { value: m.id, selected: f.responsable_id === m.id || undefined }, m.nom)));
+  const etat = menu(ETATS, { valeur: f.etat, libelle: 'État' });
+  const relance = calendrier({ valeur: f.relance_le || '', libelle: 'Date de relance', vide: 'Pas de relance prévue' });
+  const montant = champMontant(f.montant);
+  const responsable = menu([['', 'Personne'], ...equipe.filter(m => m.actif !== false).map(m => [m.id, m.nom])], { valeur: f.responsable_id || '', libelle: 'Responsable' });
   const enregistrer = h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
-    await api('/demandes/' + id, { methode: 'PATCH', corps: { etat: etat.value, relance_le: relance.value || null, montant: montant.value === '' ? null : Number(montant.value), responsable_id: responsable.value || null } });
+    await api('/demandes/' + id, { methode: 'PATCH', corps: { etat: etat.valeur, relance_le: relance.valeur || null, montant: montant.nombre, responsable_id: responsable.valeur || null } });
     toast('Fiche enregistrée.'); vueFiche(id);
   }, e.currentTarget) }, 'Enregistrer');
-  const genre = h('select', {}, GENRES.filter(g => g[0] !== 'etat' && g[0] !== 'email').map(([v, l]) => h('option', { value: v }, l)));
+  const genre = menu(GENRES.filter(g => g[0] !== 'etat' && g[0] !== 'email'), { libelle: 'Type de note' });
   const note = h('textarea', { placeholder: 'Ce qui s\'est dit, la prochaine étape…', style: 'min-height:80px' });
   const ajouterNote = h('button', { class: 'btn second', type: 'button', onclick: e => essayer(async () => {
     if (!note.value.trim()) return toast('La note est vide.', true);
-    await api('/demandes/' + id + '/notes', { methode: 'POST', corps: { genre: genre.value, texte: note.value } }); toast('Note ajoutée.'); vueFiche(id);
+    await api('/demandes/' + id + '/notes', { methode: 'POST', corps: { genre: genre.valeur, texte: note.value } }); toast('Note ajoutée.'); vueFiche(id);
   }, e.currentTarget) }, 'Ajouter au suivi');
   const sujetMail = h('input', { value: 'Votre demande auprès de ZTi' });
   const texteMail = h('textarea', { value: `Bonjour ${f.nom},\n\n` });
@@ -266,7 +420,7 @@ async function vueFiche(id) {
     await api('/demandes/' + id + '/email', { methode: 'POST', corps: { sujet: sujetMail.value, texte: texteMail.value } }); toast('E-mail envoyé.'); vueFiche(id);
   }, e.currentTarget) }, 'Envoyer l\'e-mail');
   const supprimer = moi.role === 'admin' ? h('button', { class: 'btn danger petit', type: 'button', onclick: e => essayer(async () => {
-    if (!confirm('Supprimer définitivement cette fiche et son historique ? (à faire seulement si la personne le demande)')) return;
+    if (!(await confirmer({ titre: 'Supprimer cette fiche ?', texte: 'La fiche et tout son historique seront effacés définitivement. À faire seulement si la personne le demande.', bouton: 'Supprimer', danger: true }))) return;
     await api('/demandes/' + id, { methode: 'DELETE' }); toast('Fiche supprimée.'); location.hash = '#/demandes';
   }, e.currentTarget) }, 'Supprimer la fiche') : null;
   cadre([
@@ -286,9 +440,9 @@ async function vueFiche(id) {
         f.email ? h('div', { class: 'carte formulaire' }, h('h2', {}, 'Écrire un e-mail'), h('p', { class: 'muet' }, 'Part à ' + f.email + ', avec la signature ZTi. Gardé dans l\'historique.'),
           h('label', {}, 'Sujet', sujetMail), h('label', {}, 'Message', texteMail), h('div', { class: 'actions' }, envoyerMail)) : null),
       h('div', { class: 'grille' },
-        h('div', { class: 'carte formulaire' }, h('h2', {}, 'Suivi'), h('label', {}, 'État', etat), h('label', {}, 'Relancer le', relance),
-          h('label', {}, 'Responsable', responsable), h('label', {}, 'Montant du devis ou du contrat (F CFA)', montant), h('div', { class: 'actions' }, enregistrer, supprimer)),
-        h('div', { class: 'carte formulaire' }, h('h2', {}, 'Historique'), h('label', {}, 'Type', genre), note, h('div', { class: 'actions' }, ajouterNote),
+        h('div', { class: 'carte formulaire' }, h('h2', {}, 'Suivi'), champ('État', etat), champ('Relancer le', relance),
+          champ('Responsable', responsable), h('label', {}, 'Montant du devis ou du contrat (F CFA)', montant), h('div', { class: 'actions' }, enregistrer, supprimer)),
+        h('div', { class: 'carte formulaire' }, h('h2', {}, 'Historique'), champ('Type', genre), note, h('div', { class: 'actions' }, ajouterNote),
           notes.length ? h('div', { class: 'historique' }, notes.map(n => h('div', { class: 'g-' + n.genre },
             h('small', {}, nomGenre(n.genre) + ' · ' + dateHeure(n.cree_le) + (n.auteur ? ' · ' + n.auteur : '')),
             h('p', {}, n.genre === 'etat' ? n.texte.split(' → ').map(nomEtat).join(' → ') : n.texte)))) : h('p', { class: 'muet' }, 'Aucune note pour l\'instant.')))),
@@ -315,7 +469,7 @@ async function vueAvis() {
         a.statut !== 'refuse' ? action(a.id, 'refuse', a.statut === 'publie' ? 'Retirer du site' : 'Refuser') : null,
         a.statut === 'refuse' ? action(a.id, 'en_attente', 'Remettre à valider') : null,
         moi.role === 'admin' ? h('button', { class: 'btn danger petit', type: 'button', onclick: e => essayer(async () => {
-          if (!confirm('Supprimer définitivement cet avis ?')) return; await api('/avis/' + a.id, { methode: 'DELETE' }); toast('Avis supprimé.'); vueAvis();
+          if (!(await confirmer({ titre: 'Supprimer cet avis ?', texte: 'Il sera effacé définitivement.', bouton: 'Supprimer', danger: true }))) return; await api('/avis/' + a.id, { methode: 'DELETE' }); toast('Avis supprimé.'); vueAvis();
         }, e.currentTarget) }, 'Supprimer') : null))))
       : h('div', { class: 'carte vide' }, statutAvis === 'en_attente' ? 'Aucun avis à valider.' : 'Aucun avis ici.'),
   ]);
@@ -324,6 +478,7 @@ async function vueAvis() {
 // ——— CAMPAGNES ———
 const PAGES = [['/', 'Accueil'], ['/offres/diagnostic-ecoles/', 'Écoles'], ['/offres/audit-pme/', 'Entreprises'], ['/offres/particuliers/', 'Particuliers'], ['/contact/', 'Contact']];
 const SOURCES = ['facebook', 'instagram', 'linkedin', 'whatsapp', 'tiktok', 'google', 'youtube', 'affiche', 'autre'];
+const NOMS_SOURCES = { facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', whatsapp: 'WhatsApp', tiktok: 'TikTok', google: 'Google', youtube: 'YouTube', affiche: 'Affiche / flyer', autre: 'Autre' };
 const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 async function vueCampagnes(edition = null) {
   const [{ campagnes, stats }, reg] = await Promise.all([api('/campagnes?jours=365'), api('/reglages')]);
@@ -332,17 +487,18 @@ async function vueCampagnes(edition = null) {
   const champs = {
     nom: h('input', { value: k.nom, placeholder: 'Ex. Écoles — rentrée novembre', oninput: e => { if (!edition) champs.code.value = slug(e.target.value); maj(); } }),
     code: h('input', { value: k.code, oninput: () => maj() }),
-    source: h('select', { onchange: () => maj() }, SOURCES.map(s => h('option', { value: s, selected: k.source === s || undefined }, s))),
-    support: h('select', { onchange: () => maj() }, [['paid', 'Publicité payante'], ['social', 'Publication gratuite'], ['message', 'Message / groupe'], ['print', 'Imprimé (affiche, flyer)']].map(([v, l]) => h('option', { value: v, selected: k.support === v || undefined }, l))),
-    page: h('select', { onchange: () => maj() }, PAGES.map(([v, l]) => h('option', { value: v, selected: k.page === v || undefined }, l + ' — ' + v))),
-    budget: h('input', { type: 'number', min: 0, step: 1000, value: k.budget ?? '' }), debut: h('input', { type: 'date', value: k.debut || '' }),
-    fin: h('input', { type: 'date', value: k.fin || '' }), notes: h('textarea', { value: k.notes || '', style: 'min-height:70px' }),
+    source: menu(SOURCES.map(s => [s, NOMS_SOURCES[s] || s]), { valeur: k.source, libelle: 'Réseau', onchange: () => maj() }),
+    support: menu([['paid', 'Publicité payante'], ['social', 'Publication gratuite'], ['message', 'Message / groupe'], ['print', 'Imprimé (affiche, flyer)']], { valeur: k.support, libelle: 'Type', onchange: () => maj() }),
+    page: menu(PAGES.map(([v, l]) => [v, l + ' — ' + v]), { valeur: k.page, libelle: 'Page d\'arrivée', onchange: () => maj() }),
+    budget: champMontant(k.budget), debut: calendrier({ valeur: k.debut || '', libelle: 'Début', vide: 'Non précisé' }),
+    fin: calendrier({ valeur: k.fin || '', libelle: 'Fin', vide: 'Non précisé' }), notes: h('textarea', { value: k.notes || '', style: 'min-height:70px' }),
   };
+  const lire = el => el.valeur !== undefined ? el.valeur : el.nombre !== undefined ? el.nombre : el.value;
   const apercu = h('div', { class: 'secret', style: 'font-size:13px;overflow-wrap:anywhere' });
-  function maj() { apercu.textContent = lienSuivi({ code: champs.code.value || 'code', source: champs.source.value, support: champs.support.value, page: champs.page.value }); }
+  function maj() { apercu.textContent = lienSuivi({ code: champs.code.value || 'code', source: champs.source.valeur, support: champs.support.valeur, page: champs.page.valeur }); }
   maj();
   const valider = h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
-    const corps = Object.fromEntries(Object.entries(champs).map(([c, el]) => [c, el.value]));
+    const corps = Object.fromEntries(Object.entries(champs).map(([c, el]) => [c, lire(el)]));
     await api(edition ? '/campagnes/' + edition.id : '/campagnes', { methode: edition ? 'PATCH' : 'POST', corps });
     toast(edition ? 'Campagne modifiée.' : 'Campagne créée : copiez son lien dans votre publicité.'); vueCampagnes();
   }, e.currentTarget) }, edition ? 'Enregistrer' : 'Créer la campagne');
@@ -352,9 +508,9 @@ async function vueCampagnes(edition = null) {
     h('div', { class: 'grille g2' },
       h('div', { class: 'carte formulaire' }, h('h2', {}, edition ? 'Modifier la campagne' : 'Nouvelle campagne'),
         h('label', {}, 'Nom', champs.nom), h('label', {}, 'Code (dans le lien)', champs.code),
-        h('div', { class: 'grille g2' }, h('label', {}, 'Réseau', champs.source), h('label', {}, 'Type', champs.support)),
-        h('label', {}, 'Page d\'arrivée', champs.page),
-        h('div', { class: 'grille g3' }, h('label', {}, 'Budget (F CFA)', champs.budget), h('label', {}, 'Début', champs.debut), h('label', {}, 'Fin', champs.fin)),
+        h('div', { class: 'grille g2' }, champ('Réseau', champs.source), champ('Type', champs.support)),
+        champ('Page d\'arrivée', champs.page),
+        h('div', { class: 'grille g3' }, h('label', {}, 'Budget (F CFA)', champs.budget), champ('Début', champs.debut), champ('Fin', champs.fin)),
         h('label', {}, 'Notes', champs.notes), h('div', {}, h('p', { class: 'muet' }, 'Lien à mettre dans la publicité :'), apercu),
         h('div', { class: 'actions' }, valider, h('button', { class: 'btn second', type: 'button', onclick: () => navigator.clipboard.writeText(apercu.textContent).then(() => toast('Lien copié.')) }, 'Copier le lien'),
           edition ? h('button', { class: 'btn second', type: 'button', onclick: () => vueCampagnes() }, 'Annuler') : null)),
@@ -369,7 +525,7 @@ async function vueCampagnes(edition = null) {
           h('button', { class: 'btn second petit', type: 'button', onclick: () => navigator.clipboard.writeText(lienSuivi(c)).then(() => toast('Lien copié.')) }, 'Copier le lien'),
           h('button', { class: 'btn second petit', type: 'button', onclick: () => { vueCampagnes(c); scrollTo(0, 0); } }, 'Modifier'),
           moi.role === 'admin' ? h('button', { class: 'btn danger petit', type: 'button', onclick: e => essayer(async () => {
-            if (!confirm('Supprimer cette campagne ? (les visites et demandes restent)')) return; await api('/campagnes/' + c.id, { methode: 'DELETE' }); vueCampagnes();
+            if (!(await confirmer({ titre: 'Supprimer cette campagne ?', texte: 'Les visites et les demandes qu\'elle a apportées restent dans le tableau de bord.', bouton: 'Supprimer', danger: true }))) return; await api('/campagnes/' + c.id, { methode: 'DELETE' }); vueCampagnes();
           }, e.currentTarget) }, 'Supprimer') : null)))))))) : null,
   ]);
 }
@@ -383,9 +539,9 @@ async function vueEquipe() {
     h('h2', {}, 'Mot de passe provisoire de ' + qui), h('p', { class: 'muet' }, 'Transmettez-le en main propre ou par WhatsApp. Il ne sera plus affiché ; la personne devra le changer à sa première connexion.'),
     h('div', { class: 'secret' }, mdp)));
   const nom = h('input', { placeholder: 'Nom et prénom' }), email = h('input', { type: 'email', placeholder: 'adresse@exemple.com' });
-  const role = h('select', {}, h('option', { value: 'membre' }, 'Membre (suivi des clients, avis, campagnes)'), h('option', { value: 'admin' }, 'Administrateur (tout, dont l\'équipe et les réglages)'));
+  const role = menu([['membre', 'Membre (suivi des clients, avis, campagnes)'], ['admin', 'Administrateur (tout, dont l\'équipe et les réglages)']], { libelle: 'Rôle' });
   const ajouter = h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
-    const r = await api('/equipe', { methode: 'POST', corps: { nom: nom.value, email: email.value, role: role.value } });
+    const r = await api('/equipe', { methode: 'POST', corps: { nom: nom.value, email: email.value, role: role.valeur } });
     await vueEquipe(); montrerMdp(nom.value, r.mot_de_passe_provisoire);
   }, e.currentTarget) }, 'Ajouter');
   cadre([
@@ -399,10 +555,10 @@ async function vueEquipe() {
             h('button', { class: 'btn second petit', type: 'button', onclick: e => essayer(async () => { await api('/equipe/' + m.id, { methode: 'PATCH', corps: { actif: !m.actif } }); vueEquipe(); }, e.currentTarget) }, m.actif ? 'Désactiver' : 'Réactiver'),
             h('button', { class: 'btn second petit', type: 'button', onclick: e => essayer(async () => { await api('/equipe/' + m.id, { methode: 'PATCH', corps: { role: m.role === 'admin' ? 'membre' : 'admin' } }); vueEquipe(); }, e.currentTarget) }, m.role === 'admin' ? 'Passer membre' : 'Passer admin'),
             h('button', { class: 'btn second petit', type: 'button', onclick: e => essayer(async () => {
-              if (!confirm('Créer un nouveau mot de passe provisoire pour ' + m.nom + ' ?')) return;
+              if (!(await confirmer({ titre: 'Nouveau mot de passe provisoire ?', texte: m.nom + ' sera déconnecté et devra se connecter avec le nouveau mot de passe, puis le changer.', bouton: 'Créer le mot de passe' }))) return;
               const r = await api('/equipe/' + m.id + '/reinitialiser', { methode: 'POST' }); montrerMdp(m.nom, r.mot_de_passe_provisoire);
             }, e.currentTarget) }, 'Nouveau mot de passe')))))))),
-      h('div', { class: 'carte formulaire' }, h('h2', {}, 'Ajouter une personne'), h('label', {}, 'Nom', nom), h('label', {}, 'E-mail', email), h('label', {}, 'Rôle', role), h('div', { class: 'actions' }, ajouter))),
+      h('div', { class: 'carte formulaire' }, h('h2', {}, 'Ajouter une personne'), h('label', {}, 'Nom', nom), h('label', {}, 'E-mail', email), champ('Rôle', role), h('div', { class: 'actions' }, ajouter))),
   ]);
 }
 
@@ -411,16 +567,16 @@ async function vueReglages() {
   const r = await api('/reglages');
   const admin = moi.role === 'admin';
   const dest = h('input', { value: (r.alertes?.destinataires || []).join(', '), disabled: !admin || undefined });
-  const alDem = h('input', { type: 'checkbox', checked: r.alertes?.demandes !== false, disabled: !admin || undefined });
-  const alAvis = h('input', { type: 'checkbox', checked: r.alertes?.avis !== false, disabled: !admin || undefined });
-  const accActif = h('input', { type: 'checkbox', checked: r.accuse_demande?.actif !== false, disabled: !admin || undefined });
+  const alDem = interrupteur('Une alerte à chaque nouvelle demande', { coche: r.alertes?.demandes !== false, desactive: !admin });
+  const alAvis = interrupteur('Une alerte à chaque nouvel avis', { coche: r.alertes?.avis !== false, desactive: !admin });
+  const accActif = interrupteur('Envoyer l\'accusé de réception', { coche: r.accuse_demande?.actif !== false, desactive: !admin });
   const accSujet = h('input', { value: r.accuse_demande?.sujet || '', disabled: !admin || undefined });
   const accTexte = h('textarea', { value: r.accuse_demande?.texte || '', style: 'min-height:220px', disabled: !admin || undefined });
   const signature = h('textarea', { value: r.signature?.texte || '', style: 'min-height:70px', disabled: !admin || undefined });
   const enregistrer = admin ? h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
     await api('/reglages', { methode: 'PUT', corps: {
-      alertes: { destinataires: dest.value.split(',').map(s => s.trim()).filter(Boolean), demandes: alDem.checked, avis: alAvis.checked },
-      accuse_demande: { actif: accActif.checked, sujet: accSujet.value, texte: accTexte.value }, signature: { texte: signature.value } } });
+      alertes: { destinataires: dest.value.split(',').map(s => s.trim()).filter(Boolean), demandes: alDem.coche, avis: alAvis.coche },
+      accuse_demande: { actif: accActif.coche, sujet: accSujet.value, texte: accTexte.value }, signature: { texte: signature.value } } });
     toast('Réglages enregistrés.');
   }, e.currentTarget) }, 'Enregistrer') : null;
   const essai = h('button', { class: 'btn second', type: 'button', onclick: e => essayer(async () => { await api('/reglages/essai', { methode: 'POST' }); toast('E-mail d\'essai envoyé à ' + moi.email + '.'); }, e.currentTarget) }, 'M\'envoyer un e-mail d\'essai');
@@ -432,20 +588,20 @@ async function vueReglages() {
       r.emails_actifs ? essai : null),
     h('div', { class: 'grille g2' },
       h('div', { class: 'carte formulaire' }, h('h2', {}, 'Alertes à l\'équipe'), h('label', {}, 'Adresses qui reçoivent les alertes (séparées par des virgules)', dest),
-        h('label', { class: 'case' }, alDem, 'Une alerte à chaque nouvelle demande'), h('label', { class: 'case' }, alAvis, 'Une alerte à chaque nouvel avis'),
+        alDem, alAvis,
         h('h2', { style: 'margin-top:10px' }, 'Signature des e-mails'), signature),
       h('div', { class: 'carte formulaire' }, h('h2', {}, 'Accusé de réception au client'),
         h('p', { class: 'muet', style: 'margin:0' }, 'Envoyé automatiquement quand la personne a donné son e-mail. Vous pouvez écrire {prenom}, {nom} ou {organisation}.'),
-        h('label', { class: 'case' }, accActif, 'Envoyer l\'accusé de réception'), h('label', {}, 'Sujet', accSujet), h('label', {}, 'Texte', accTexte))),
+        accActif, h('label', {}, 'Sujet', accSujet), h('label', {}, 'Texte', accTexte))),
     admin ? h('div', { class: 'actions', style: 'margin-top:16px' }, enregistrer) : null,
   ]);
 }
 
 // ——— MON COMPTE ———
 function vueCompte(force = false) {
-  const actuel = h('input', { type: 'password', autocomplete: 'current-password' });
-  const nouveau = h('input', { type: 'password', autocomplete: 'new-password', minlength: 10 });
-  const confirmation = h('input', { type: 'password', autocomplete: 'new-password' });
+  const actuel = champMotDePasse({ autocomplete: 'current-password' });
+  const nouveau = champMotDePasse({ autocomplete: 'new-password' });
+  const confirmation = champMotDePasse({ autocomplete: 'new-password' });
   const valider = h('button', { class: 'btn', type: 'submit' }, 'Changer le mot de passe');
   const formulaire = h('form', { class: 'carte formulaire', style: 'max-width:480px', onsubmit: e => { e.preventDefault(); essayer(async () => {
     if (nouveau.value !== confirmation.value) throw new Error('Les deux nouveaux mots de passe ne sont pas identiques.');
