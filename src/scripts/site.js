@@ -287,3 +287,79 @@ if (matchMedia('(hover: hover)').matches) {
     c.style.setProperty('--mx', `${e.clientX - r.left}px`); c.style.setProperty('--my', `${e.clientY - r.top}px`);
   }, { passive: true });
 }
+
+/* ---------- diagnostic en ligne (particuliers) ---------- */
+$$('form[data-diagnostic]').forEach(form => {
+  const etapes = $$('[data-etape]', form), progression = $('[data-progression]', form), barre = $('[data-barre]', form);
+  const titres = ['Votre problème', 'Une précision', 'Votre appareil', 'Premier avis et contact'];
+  const choix = {};
+  let courante = 0;
+  const erreurEtape = $('[data-erreur-etape]', form);
+  const aller = n => {
+    courante = n; erreurEtape.hidden = true;
+    etapes.forEach((e, i) => { e.hidden = i !== n; });
+    progression.textContent = `Étape ${n + 1} sur 4 · ${titres[n]}`;
+    barre.style.width = `${(n + 1) * 25}%`;
+    if (n === 1) $$('.diag-detail', form).forEach(d => { d.hidden = d.dataset.pour !== choix.probleme; });
+    if (n === 3) $$('[data-avis]', form).forEach(a => { a.hidden = a.dataset.avis !== `${choix.probleme}|${choix.detail || ''}`; });
+    const haut = form.getBoundingClientRect().top + scrollY - 90;
+    if (scrollY > haut) window.scrollTo({ top: haut, behavior: 'smooth' });
+    const cible = n === 1 ? $(`.diag-detail[data-pour="${CSS.escape(choix.probleme || '')}"] button, .diag-detail[data-pour="${CSS.escape(choix.probleme || '')}"] textarea`, form) : $('button:not(.retour), input', etapes[n]);
+    cible?.focus({ preventScroll: true });
+    if (n === 1) window.ztiMesurer?.('etape2');
+  };
+  const signaler = texte => { erreurEtape.textContent = texte; erreurEtape.hidden = false; };
+  // cartes et options : un seul choix par groupe ; certaines font avancer toutes seules
+  $$('[data-groupe]', form).forEach(g => $$('button', g).forEach(b => b.addEventListener('click', () => {
+    $$('button', g).forEach(x => x.setAttribute('aria-checked', String(x === b)));
+    choix[g.dataset.groupe] = b.dataset.valeur;
+    if (g.dataset.groupe === 'probleme') { choix.detail = ''; setTimeout(() => aller(1), 220); }
+    if (g.dataset.groupe === 'detail') setTimeout(() => aller(2), 220);
+  })));
+  $$('[data-suivant]', etapes[1]).forEach(b => b.addEventListener('click', () => aller(2)));
+  $$('[data-suivant]', etapes[2]).forEach(b => b.addEventListener('click', () => {
+    if (!choix.appareil || !choix.duree) return signaler('Choisissez votre appareil et depuis quand le problème existe.');
+    aller(3);
+  }));
+  $$('[data-retour]', form).forEach(b => b.addEventListener('click', () => aller(courante - 1)));
+
+  const caseAccord = $('[data-case="accord"]', form);
+  caseAccord.addEventListener('click', () => { caseAccord.setAttribute('aria-checked', String(caseAccord.getAttribute('aria-checked') !== 'true')); caseAccord.closest('.champ').classList.remove('invalide'); });
+  const v = n => (form.elements[n]?.value || '').trim();
+  const tel = form.elements.tel;
+  tel.addEventListener('input', () => { const c = tel.value.replace(/\D/g, '').replace(/^237/, '').slice(0, 9); tel.value = c.replace(/(\d)(\d{0,2})(\d{0,2})(\d{0,2})(\d{0,2})/, (m, a, b, c2, d, e) => [a + b, c2, d, e].filter(Boolean).join(' ')); });
+  $$('input, textarea', form).forEach(i => i.addEventListener('input', () => i.closest('.champ')?.classList.remove('invalide')));
+
+  let envoi = false;
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (envoi || form.elements.site_web.value) return;
+    const erreurs = [];
+    const marque = (n, ok) => { const c = $(`[data-champ="${n}"]`, form); c?.classList.toggle('invalide', !ok); if (!ok) erreurs.push(c); };
+    marque('nom', v('nom').length >= 2);
+    marque('tel', /^6\d{8}$/.test(v('tel').replace(/\D/g, '')));
+    marque('email', !v('email') || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v('email')));
+    marque('accord', caseAccord.getAttribute('aria-checked') === 'true');
+    const msg = $('[data-etape="4"] .message-erreur', form);
+    if (erreurs.length) { msg.textContent = 'Quelques informations manquent : elles sont signalées ci-dessus.'; msg.hidden = false; erreurs[0].querySelector('input, button')?.focus(); return; }
+    msg.hidden = true;
+    const chiffres = v('tel').replace(/\D/g, '');
+    const resume = [choix.detail && `Précision : ${choix.detail}`, v('autre') && `Description : ${v('autre')}`, `Depuis : ${choix.duree}`, v('message')].filter(Boolean).join('\n');
+    const d = {
+      accord: true, sujet: form.dataset.sujet, profil: 'Particulier', nom: v('nom'),
+      tel: '+237 ' + chiffres.replace(/(\d)(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5'), email: v('email'), lieu: v('lieu'),
+      postes: choix.appareil, situation: choix.detail || choix.probleme, besoins: [choix.probleme], moment: choix.moment || '', message: resume,
+      page: form.dataset.page || location.pathname, campagne: form.dataset.campagne || '', adresse: location.href.split('#')[0],
+      ...JSON.parse(sessionStorage.getItem(SOURCE) || '{}'),
+    };
+    $('button[type="submit"]', form).disabled = true; envoi = true;
+    const enregistree = form.dataset.endpoint ? await envoyerDemande(form.dataset.endpoint, d) : false;
+    suivi('Lead', { content_name: d.sujet, content_category: d.campagne || d.page });
+    const texte = [`Bonjour ZTi, voici mon diagnostic en ligne :`, `• Problème : ${choix.probleme}`, choix.detail && `• Précision : ${choix.detail}`,
+      `• Appareil : ${choix.appareil}`, `• Depuis : ${choix.duree}`, v('autre') && `• Description : ${v('autre')}`,
+      `• Nom : ${d.nom}`, `• Téléphone : ${d.tel}`, d.lieu && `• Lieu : ${d.lieu}`, d.moment && `• Meilleur moment : ${d.moment}`, v('message') && `• Message : ${v('message')}`]
+      .filter(Boolean).join('\n');
+    sessionStorage.setItem('zti-demande', JSON.stringify({ enregistree, texte, sujet: d.sujet, wa: form.dataset.wa, mail: form.dataset.mail }));
+    location.href = form.dataset.merci;
+  });
+});

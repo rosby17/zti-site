@@ -23,7 +23,7 @@ const annee = new Date().getFullYear();
         {suivre.length > 0 && (
           <div class="suivre">
             <span>Suivez ZTi</span>
-            <ul>{suivre.map(x => <li><a href={x.adresse} rel="noopener" target="_blank" aria-label={`ZTi sur ${x.nom}`} title={x.nom}><Icone nom={x.icone} /></a></li>)}</ul>
+            <ul>{suivre.map(x => <li><a href={x.adresse} rel="noopener" target="_blank" aria-label={`ZTi sur ${x.nom}`}><Icone nom={x.icone} /></a></li>)}</ul>
           </div>
         )}
       </div>

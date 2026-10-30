@@ -13,7 +13,7 @@ sections:
     accent: Ne le laissez pas tomber.
     texte: "Ordinateur qui rame, virus, fichiers disparus d'une clé USB, écran qui ne s'allume plus : ZTi diagnostique d'abord, répare ensuite, et vous explique ce qu'il a fait."
     bouton:
-      texte: Décrire mon problème
+      texte: Faire mon diagnostic en ligne
       lien: "#demande"
     sous_bouton: Réponse rapide · Suivi de deux semaines après l'intervention
     image: /images/public-particuliers.webp
@@ -61,16 +61,14 @@ sections:
     fond: ivoire
     etiquette: Nos références
     titre: Ils nous ont fait confiance.
-  - type: demande
+  - type: diagnostic
     fond: bleu
     ancre: demande
-    titre: Décrivez votre problème.
-    texte: "ZTi vous recontacte au moment choisi, par téléphone ou WhatsApp."
-    sujet: Dépannage (particulier)
-    formulaire: particuliers
-    garanties: [Diagnostic avant toute réparation, Vous restez l'unique décideur, Suivi de deux semaines après l'intervention]
-    garanties_bouton: [Sans engagement]
-    bouton: Envoyer ma demande
+    etiquette: Diagnostic en ligne
+    titre: Que se passe-t-il avec votre ordinateur ?
+    texte: "Quatre questions, un premier avis de ZTi tout de suite, puis ZTi vous rappelle au moment choisi."
+    sujet: Diagnostic en ligne (particulier)
+    bouton: Envoyer à ZTi
   - type: signature
     fond: blanc
     titre: Avec ZTi, ne jetez plus, entretenez et rentabilisez !

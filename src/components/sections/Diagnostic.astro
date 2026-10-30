@@ -1,0 +1,184 @@
+---
+// Diagnostic en ligne pour les particuliers : un parcours en 4 étapes avec de grandes cartes illustrées.
+// 1. le problème ; 2. une précision (qui dépend du problème) ; 3. l'appareil et depuis quand ;
+// 4. le premier avis de ZTi (ce qui se passe souvent, ce qu'il faut faire tout de suite, ce qu'il ne faut pas faire),
+// puis les coordonnées. La demande part comme les autres (serveur de ZTi, sinon WhatsApp déjà rédigé).
+// Les avis sont prudents (« souvent », « peut venir de ») : le vrai diagnostic reste celui de ZTi.
+import Cadre from './Cadre.astro';
+import Icone from '../Icone.astro';
+import { reglages, lien } from '../../lib/contenu';
+const { s, premier = false, page, campagne } = Astro.props as { s: any; premier?: boolean; page: string; campagne: string };
+const r = await reglages();
+const id = s.ancre || 'demande';
+
+type Detail = { v: string; avis: { cause: string; faire: string[]; eviter: string[]; donnees?: boolean } };
+type Probleme = { v: string; icone: string; question: string; details: Detail[] };
+const problemes: Probleme[] = [
+  { v: 'Ordinateur lent', icone: 'lent', question: "Qu'est-ce qui est lent ?", details: [
+    { v: 'Le démarrage', avis: { cause: "Souvent trop de programmes qui se lancent au démarrage, un disque presque plein ou un disque dur qui fatigue.", faire: ['Vérifiez qu\'il reste de la place sur le disque C:', 'Sauvegardez dès maintenant vos fichiers importants'], eviter: ['Les « nettoyeurs » miracles téléchargés sur internet'] } },
+    { v: 'Tout, tout le temps', avis: { cause: "Peut venir d'un disque dur en fin de vie, d'un manque de mémoire ou d'un virus.", faire: ['Sauvegardez vos fichiers importants sans attendre', 'Notez depuis quand c\'est apparu'], eviter: ['Éteindre en appuyant longtemps sur le bouton, sauf si l\'ordinateur est bloqué'], donnees: true } },
+    { v: 'Internet seulement', avis: { cause: "Souvent la connexion elle-même (box, forfait, Wi-Fi faible), parfois un programme qui utilise internet en arrière-plan.", faire: ['Redémarrez la box ou le routeur', 'Essayez avec un autre appareil sur la même connexion'], eviter: [] } },
+    { v: 'Depuis une mise à jour', avis: { cause: "Une mise à jour encore en cours ou mal terminée ralentit souvent l'ordinateur pendant quelques jours.", faire: ['Laissez-le allumé et branché une heure', 'Redémarrez-le une fois proprement'], eviter: ['Couper le courant pendant une mise à jour'] } },
+  ] },
+  { v: 'Virus ou publicités', icone: 'virus', question: 'Que voyez-vous ?', details: [
+    { v: 'Des publicités, des fenêtres qui s\'ouvrent', avis: { cause: "Un programme indésirable s'est installé, souvent avec un logiciel gratuit ou une extension du navigateur.", faire: ['Ne cliquez sur aucune fenêtre suspecte', 'Changez vos mots de passe importants depuis un autre appareil'], eviter: ['Appeler un numéro affiché dans une fenêtre d\'alerte', 'Installer l\'antivirus proposé par une publicité'] } },
+    { v: 'Mes fichiers sont cachés sur une clé USB', avis: { cause: "Un virus très courant au Cameroun rend les fichiers invisibles : ils sont presque toujours encore sur la clé.", faire: ['Gardez la clé de côté, sans rien y ajouter', 'ZTi les fait réapparaître avec son outil « ZTi Restauration des fichiers cachés »'], eviter: ['Formater la clé', 'Ouvrir les raccourcis qui sont apparus sur la clé'], donnees: true } },
+    { v: 'Un message de rançon, des fichiers illisibles', avis: { cause: "C'est un rançongiciel : il chiffre les fichiers et réclame de l'argent.", faire: ['Débranchez l\'ordinateur d\'internet (câble et Wi-Fi)', 'Débranchez les clés et disques externes', 'Contactez ZTi rapidement'], eviter: ['Payer la rançon', 'Brancher d\'autres clés ou disques sur cet ordinateur'], donnees: true } },
+    { v: 'L\'antivirus donne l\'alerte', avis: { cause: "L'antivirus a peut-être déjà bloqué la menace, ou il manque une mise à jour.", faire: ['Notez ou photographiez le message', 'Laissez l\'antivirus terminer son analyse'], eviter: ['Désactiver l\'antivirus pour « faire passer » un fichier'] } },
+  ] },
+  { v: 'Fichiers perdus', icone: 'fichiers', question: 'Que leur est-il arrivé ?', details: [
+    { v: 'Supprimés par erreur', avis: { cause: "Des fichiers supprimés restent souvent récupérables tant qu'on n'écrit rien par-dessus.", faire: ['Arrêtez d\'utiliser le support (clé, disque, ordinateur) tout de suite', 'Regardez d\'abord dans la Corbeille'], eviter: ['Enregistrer ou installer quoi que ce soit dessus, y compris un logiciel de récupération'], donnees: true } },
+    { v: 'Le support a été formaté', avis: { cause: "Après un formatage rapide, une grande partie des fichiers est souvent récupérable.", faire: ['Débranchez le support et gardez-le de côté'], eviter: ['Le reformater ou y copier de nouveaux fichiers'], donnees: true } },
+    { v: 'La clé ou le disque n\'est plus reconnu', avis: { cause: "Le support est peut-être abîmé : c'est le travail de la récupération de données. Pour les cas les plus durs, ZTi travaille avec le laboratoire Recoveo France.", faire: ['Débranchez-le et gardez-le de côté'], eviter: ['Le brancher et le débrancher en boucle', 'L\'utiliser encore s\'il fait un bruit de « clic »'], donnees: true } },
+    { v: 'Cachés après un virus', avis: { cause: "Les fichiers sont presque toujours encore là, simplement rendus invisibles.", faire: ['ZTi les fait réapparaître avec son outil « ZTi Restauration des fichiers cachés »'], eviter: ['Formater la clé'], donnees: true } },
+  ] },
+  { v: 'Ne démarre plus', icone: 'demarrage', question: 'Que se passe-t-il quand vous l\'allumez ?', details: [
+    { v: 'Rien ne s\'allume', avis: { cause: "Souvent le chargeur, la batterie, la prise ou l'alimentation.", faire: ['Essayez une autre prise et, si possible, un autre chargeur'], eviter: ['Ouvrir l\'ordinateur vous-même'] } },
+    { v: 'Ça tourne mais l\'écran reste noir', avis: { cause: "Peut venir de l'écran, de la carte graphique ou de la mémoire.", faire: ['Si c\'est possible, branchez un autre écran'], eviter: [] } },
+    { v: 'Un message d\'erreur s\'affiche', avis: { cause: "Le message indique souvent la cause : disque, système ou démarrage de Windows.", faire: ['Photographiez le message et envoyez-le à ZTi'], eviter: ['Réinstaller Windows sans avoir sauvegardé vos fichiers'], donnees: true } },
+    { v: 'Il redémarre en boucle', avis: { cause: "Problème très courant sur les ordinateurs mal entretenus, et souvent réparable. Pour les redémarrages en boucle au moment de l'éteindre, ZTi a créé l'outil « ZTi Arrêt 5S ».", faire: ['Notez à quel moment il redémarre (au démarrage ou à l\'arrêt)'], eviter: ['Couper le courant plusieurs fois de suite'] } },
+  ] },
+  { v: 'Écran, clavier ou batterie', icone: 'materiel', question: 'Quelle pièce pose problème ?', details: [
+    { v: 'L\'écran', avis: { cause: "Écran cassé, nappe abîmée ou carte graphique : le diagnostic permet de savoir quelle pièce changer.", faire: ['Branchez un autre écran pour voir si l\'image revient'], eviter: [] } },
+    { v: 'Le clavier ou le pavé tactile', avis: { cause: "Souvent un liquide renversé, de la poussière ou un pilote.", faire: ['En cas de liquide : éteignez et débranchez tout de suite, ordinateur retourné'], eviter: ['Le sécher au sèche-cheveux chaud'] } },
+    { v: 'La batterie', avis: { cause: "Une batterie s'use avec le temps ; une batterie qui gonfle ou chauffe est dangereuse.", faire: ['Si elle gonfle ou chauffe : ne la chargez plus'], eviter: ['Continuer à l\'utiliser si elle a gonflé'] } },
+    { v: 'Le chargeur', avis: { cause: "Câble abîmé ou chargeur inadapté : un chargeur de mauvaise qualité peut abîmer l'ordinateur.", faire: ['Vérifiez le câble et la prise'], eviter: ['Les chargeurs « universels » sans garantie'] } },
+  ] },
+  { v: 'Internet ou Wi-Fi', icone: 'wifi', question: 'Que se passe-t-il ?', details: [
+    { v: 'Le Wi-Fi n\'apparaît pas', avis: { cause: "Souvent un pilote, le Wi-Fi désactivé (touche ou mode avion) ou une carte Wi-Fi en panne.", faire: ['Vérifiez le mode avion et la touche Wi-Fi'], eviter: [] } },
+    { v: 'Connecté mais pas d\'internet', avis: { cause: "Souvent la box, le forfait ou un réglage réseau.", faire: ['Redémarrez la box', 'Essayez avec un téléphone sur le même Wi-Fi'], eviter: [] } },
+    { v: 'Internet très lent', avis: { cause: "La connexion, la distance avec la box ou un programme qui télécharge en arrière-plan.", faire: ['Rapprochez-vous de la box pour comparer'], eviter: [] } },
+  ] },
+  { v: 'Installer Windows ou un logiciel', icone: 'installation', question: 'Que voulez-vous installer ?', details: [
+    { v: 'Windows', avis: { cause: "Une réinstallation propre redonne souvent une seconde jeunesse à l'ordinateur.", faire: ['Listez les logiciels dont vous avez besoin', 'Sauvegardez vos fichiers avant'], eviter: ['Les versions « crackées » : elles cachent souvent des virus'], donnees: true } },
+    { v: 'Office ou un logiciel de travail', avis: { cause: "ZTi installe les logiciels avec des licences en règle.", faire: ['Gardez vos licences et codes d\'activation'], eviter: ['Les logiciels piratés'] } },
+    { v: 'Un antivirus', avis: { cause: "Un bon antivirus, bien réglé et à jour, évite la plupart des problèmes.", faire: [], eviter: ['Installer deux antivirus en même temps'] } },
+  ] },
+  { v: 'Autre problème', icone: 'autre', question: '', details: [] },
+];
+const appareils = ['Ordinateur portable', 'Ordinateur de bureau', 'Clé USB ou disque dur', 'Autre'];
+const durees = ["Aujourd'hui", 'Depuis quelques jours', "Depuis plus d'un mois"];
+const moments = ['Matin', 'Midi', 'Après-midi', 'Soir'];
+const ICONES: Record<string, string> = {
+  lent: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
+  virus: '<circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5M5 5l3.5 3.5M15.5 15.5 19 19M5 19l3.5-3.5M15.5 8.5 19 5"/>',
+  fichiers: '<path d="M4 4h6l2 2h8v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M12 11v5M9.5 13.5 12 16l2.5-2.5"/>',
+  demarrage: '<path d="M12 3v8"/><path d="M6.3 7.3a8 8 0 1 0 11.4 0"/>',
+  materiel: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M1 20h22M8 16v2M16 16v2"/>',
+  wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>',
+  installation: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 7v7M8.5 10.5 12 14l3.5-3.5M8 17h8"/>',
+  autre: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.2v.3"/>',
+};
+---
+<Cadre premier={premier} s={s} defaut="bleu" id={id}>
+  <form class="formulaire diagnostic rv" novalidate data-diagnostic data-profil="Particulier"
+    data-endpoint={(r.mesures?.endpoint || '').trim()} data-wa={r.contact.whatsapp} data-mail={r.contact.email}
+    data-merci={lien('/merci/')} data-page={page} data-campagne={campagne} data-sujet={s.sujet || 'Diagnostic en ligne'}>
+    <div class="diag-progres" aria-hidden="true"><span data-barre></span></div>
+    <p class="progression" aria-live="polite" data-progression>Étape 1 sur 4 · Votre problème</p>
+
+    <div class="etape" data-etape="1">
+      <h3 class="diag-question">Quel est le problème ?</h3>
+      <div class="diag-cartes" role="radiogroup" aria-label="Quel est le problème ?" data-groupe="probleme">
+        {problemes.map(p => (
+          <button type="button" class="diag-carte" role="radio" aria-checked="false" data-valeur={p.v}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICONES[p.icone]} />
+            <span>{p.v}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <div class="etape" data-etape="2" hidden>
+      <button type="button" class="retour" data-retour>← Étape précédente</button>
+      {problemes.filter(p => p.details.length).map(p => (
+        <div class="diag-detail" data-pour={p.v} hidden>
+          <h3 class="diag-question">{p.question}</h3>
+          <div class="diag-liste" role="radiogroup" aria-label={p.question} data-groupe="detail">
+            {p.details.map(d => <button type="button" class="diag-option" role="radio" aria-checked="false" data-valeur={d.v}>{d.v}</button>)}
+          </div>
+        </div>
+      ))}
+      <div class="diag-detail" data-pour="Autre problème" hidden>
+        <h3 class="diag-question">Décrivez ce qui se passe</h3>
+        <textarea name="autre" maxlength="1200" placeholder="Par exemple : mon ordinateur fait un bruit étrange depuis hier."></textarea>
+        <div><button class="btn" type="button" data-suivant>Continuer<span class="pastille"><Icone nom="fleche" /></span></button></div>
+      </div>
+    </div>
+
+    <div class="etape" data-etape="3" hidden>
+      <button type="button" class="retour" data-retour>← Étape précédente</button>
+      <h3 class="diag-question">Votre appareil</h3>
+      <div class="diag-liste diag-ligne" role="radiogroup" aria-label="Votre appareil" data-groupe="appareil">
+        {appareils.map(a => <button type="button" class="diag-option" role="radio" aria-checked="false" data-valeur={a}>{a}</button>)}
+      </div>
+      <h3 class="diag-question">Depuis quand ?</h3>
+      <div class="diag-liste diag-ligne" role="radiogroup" aria-label="Depuis quand ?" data-groupe="duree">
+        {durees.map(a => <button type="button" class="diag-option" role="radio" aria-checked="false" data-valeur={a}>{a}</button>)}
+      </div>
+      <div><button class="btn" type="button" data-suivant>Voir le premier avis de ZTi<span class="pastille"><Icone nom="fleche" /></span></button></div>
+    </div>
+
+    <div class="etape" data-etape="4" hidden>
+      <button type="button" class="retour" data-retour>← Étape précédente</button>
+      <div class="diag-avis">
+        <span class="diag-avis-titre"><Icone nom="coche" />Premier avis de ZTi</span>
+        {problemes.flatMap(p => p.details.map(d => (
+          <div data-avis={p.v + '|' + d.v} hidden>
+            {d.avis.donnees && <p class="diag-priorite">Vos données sont en jeu : agissez vite, mais sans précipitation.</p>}
+            <p><b>Ce qui se passe souvent :</b> {d.avis.cause}</p>
+            {d.avis.faire.length > 0 && <><b>À faire tout de suite</b><ul class="liste-coches">{d.avis.faire.map(x => <li>{x}</li>)}</ul></>}
+            {d.avis.eviter.length > 0 && <><b>À éviter</b><ul class="diag-eviter">{d.avis.eviter.map(x => <li>{x}</li>)}</ul></>}
+          </div>
+        )))}
+        <div data-avis="Autre problème|" hidden><p>Merci pour ces précisions : ZTi étudie votre cas et vous dit ce qu'il en pense.</p></div>
+        <p class="mention">Ce premier avis ne remplace pas le diagnostic : ZTi cherche toujours la vraie cause avant de réparer, et vous dit ce que cela coûte avant de décider.</p>
+      </div>
+      <h3 class="diag-question">Recevez l'aide de ZTi</h3>
+      <div class="deux">
+        <div class="champ" data-champ="nom">
+          <label for={`${id}-nom`}>Nom et prénom</label>
+          <input id={`${id}-nom`} name="nom" autocomplete="name" maxlength="80" required>
+          <span class="erreur">Indiquez votre nom.</span>
+        </div>
+        <div class="champ" data-champ="tel">
+          <label for={`${id}-tel`}>Téléphone / WhatsApp</label>
+          <div class="telephone"><span>+237</span><input id={`${id}-tel`} name="tel" inputmode="tel" autocomplete="tel-national" maxlength="12" placeholder="6XX XX XX XX" required></div>
+          <span class="erreur">9 chiffres, en commençant par 6.</span>
+        </div>
+      </div>
+      <div class="deux">
+        <div class="champ" data-champ="lieu">
+          <label for={`${id}-lieu`}>Quartier et ville <span class="facultatif">(facultatif)</span></label>
+          <input id={`${id}-lieu`} name="lieu" autocomplete="address-level2" maxlength="120" placeholder="Par exemple : Messassi, Yaoundé">
+        </div>
+        <div class="champ" data-champ="email">
+          <label for={`${id}-email`}>E-mail <span class="facultatif">(facultatif)</span></label>
+          <input id={`${id}-email`} name="email" type="email" autocomplete="email" maxlength="120">
+          <span class="erreur">Cette adresse e-mail n'est pas valide.</span>
+        </div>
+      </div>
+      <div class="champ">
+        <span class="titre-champ">Meilleur moment pour vous rappeler <span class="facultatif">(facultatif)</span></span>
+        <div class="choix" role="radiogroup" aria-label="Meilleur moment pour vous rappeler" data-groupe="moment">
+          {moments.map(m => <button type="button" role="radio" aria-checked="false" data-valeur={m}>{m}</button>)}
+        </div>
+      </div>
+      <div class="champ">
+        <label for={`${id}-message`}>Un détail à ajouter ? <span class="facultatif">(facultatif)</span></label>
+        <textarea id={`${id}-message`} name="message" maxlength="1500"></textarea>
+      </div>
+      <div class="piege" aria-hidden="true"><label>Ne pas remplir<input name="site_web" tabindex="-1" autocomplete="off"></label></div>
+      <div class="champ" data-champ="accord">
+        <button type="button" class="case" role="checkbox" aria-checked="false" data-case="accord">
+          <span class="boite"><Icone nom="coche" /></span>
+          <span>J'accepte que ZTi utilise ces informations uniquement pour me recontacter au sujet de ma demande. Elles ne sont ni communiquées ni cédées à des tiers (loi n° 2024/017).</span>
+        </button>
+        <span class="erreur">Votre accord est nécessaire pour que ZTi puisse vous recontacter.</span>
+      </div>
+      <p class="message-erreur" role="alert" hidden></p>
+      <div><button class="btn" type="submit">{s.bouton || 'Envoyer à ZTi'}<span class="pastille"><Icone nom="fleche" /></span></button></div>
+    </div>
+    <p class="message-erreur" data-erreur-etape role="alert" hidden></p>
+  </form>
+</Cadre>
