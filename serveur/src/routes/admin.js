@@ -6,6 +6,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { sql } from '../db.js';
 import { config } from '../config.js';
 import { envoyer, reglage } from '../notifier.js';
+import { enregistrerFichier, supprimerFichier } from '../fichiers.js';
 import {
   hacher, verifier, motDePasseProvisoire, regleMotDePasse, nouveauJeton, empreinteJeton,
   adresseIp, limiter, texte, estUuid, estEmail,
@@ -129,7 +130,10 @@ admin.get('/tableau', async c => {
       (select coalesce(sum(montant), 0) from demandes where cree_le >= ${depuis} and etat = 'client')::bigint as chiffre,
       (select count(*) from demandes where etat = 'nouvelle')::int as a_traiter,
       (select count(*) from demandes where relance_le <= current_date and etat not in ('client', 'sans_suite'))::int as a_relancer,
-      (select count(*) from avis where statut = 'en_attente')::int as avis_en_attente`;
+      (select count(*) from avis where statut = 'en_attente')::int as avis_en_attente,
+      (select count(*) from echanges where statut = 'demande')::int as echanges_en_attente,
+      (select count(*) from membres where cree_le >= ${depuis})::int as nouveaux_membres,
+      (select count(*) from demandes where parrain_id is not null and cree_le >= ${depuis})::int as demandes_recommandees`;
   const parJour = await sql`
     select to_char(j, 'YYYY-MM-DD') as jour,
       (select count(distinct visiteur) from visites v where v.evenement = 'vue' and v.cree_le::date = j)::int as visites,
@@ -230,13 +234,29 @@ admin.patch('/demandes/:id', async c => {
     const [avant] = await t`select etat from demandes where id = ${id} for update`;
     if (!avant) return null;
     const [apres] = await t`update demandes set ${t(maj)}, mis_a_jour_le = now() where id = ${id} returning id, etat`;
-    if (maj.etat && maj.etat !== avant.etat)
+    if (maj.etat && maj.etat !== avant.etat) {
       await t`insert into notes (demande_id, auteur_id, genre, texte) values (${id}, ${m.id}, 'etat', ${avant.etat + ' → ' + maj.etat})`;
+      await crediterParrain(t, id, maj.etat);
+    }
     return apres;
   });
   if (!resultat) return c.json({ erreur: 'Fiche introuvable.' }, 404);
   return c.json({ ok: true });
 });
+
+// points de l'ambassadeur : une fois quand ZTi confirme la demande du filleul, une fois quand il devient client
+// (index unique : jamais deux fois les mêmes points pour une demande, même si l'état fait des allers-retours)
+async function crediterParrain(t, demandeId, etat) {
+  const [d] = await t`select parrain_id, nom from demandes where id = ${demandeId}`;
+  if (!d?.parrain_id) return;
+  const fid = (await t`select valeur from reglages where cle = 'fidelite'`)[0]?.valeur || {};
+  if (fid.actif === false) return;
+  const prenom = String(d.nom).split(' ')[0];
+  if (['rappelee', 'rendez_vous', 'devis', 'client'].includes(etat) && fid.points_recommandation > 0)
+    await t`insert into points (membre_id, points, motif, detail, demande_id) values (${d.parrain_id}, ${fid.points_recommandation}, 'recommandation', ${'Demande de ' + prenom + ' confirmée'}, ${demandeId}) on conflict do nothing`;
+  if (etat === 'client' && fid.points_client > 0)
+    await t`insert into points (membre_id, points, motif, detail, demande_id) values (${d.parrain_id}, ${fid.points_client}, 'client', ${prenom + ' est devenu client'}, ${demandeId}) on conflict do nothing`;
+}
 
 admin.post('/demandes/:id/notes', async c => {
   const id = c.req.param('id');
@@ -425,7 +445,7 @@ admin.post('/equipe/:id/reinitialiser', async c => {
 
 // ——— réglages : e-mails ———
 admin.get('/reglages', async c => {
-  const lignes = await sql`select cle, valeur from reglages where cle in ('alertes', 'accuse_demande', 'signature')`;
+  const lignes = await sql`select cle, valeur from reglages where cle in ('alertes', 'accuse_demande', 'signature', 'fidelite')`;
   return c.json({
     ...Object.fromEntries(lignes.map(l => [l.cle, l.valeur])),
     emails_actifs: !!(config.brevo && config.expediteurEmail),
@@ -452,6 +472,13 @@ admin.put('/reglages', async c => {
     valeurs.accuse_demande = { actif: d.accuse_demande.actif !== false, sujet, texte: t };
   }
   if (d.signature) valeurs.signature = { texte: String(d.signature.texte || '').slice(0, 1000).trim() };
+  if (d.fidelite) {
+    const n = v => Math.max(0, Math.min(100000, Math.round(Number(v) || 0)));
+    const recompenses = (Array.isArray(d.fidelite.recompenses) ? d.fidelite.recompenses : []).slice(0, 20)
+      .map(r => ({ nom: texte(r?.nom, 120), points: n(r?.points) })).filter(r => r.nom && r.points > 0);
+    valeurs.fidelite = { actif: d.fidelite.actif !== false, points_bienvenue: n(d.fidelite.points_bienvenue),
+      points_recommandation: n(d.fidelite.points_recommandation), points_client: n(d.fidelite.points_client), recompenses };
+  }
   for (const [cle, valeur] of Object.entries(valeurs))
     await sql`insert into reglages (cle, valeur, modifie_par) values (${cle}, ${sql.json(valeur)}, ${m.id})
       on conflict (cle) do update set valeur = excluded.valeur, modifie_le = now(), modifie_par = excluded.modifie_par`;
@@ -464,4 +491,179 @@ admin.post('/reglages/essai', async c => {
   const res = await envoyer({ a: c.get('membre').email, sujet: 'Essai d\'e-mail — tableau de bord ZTi',
     texte: 'Bonjour,\n\nCet e-mail d\'essai confirme que les envois du site ZTi fonctionnent.\n\nL\'équipe ZTi' });
   return res.ok ? c.json({ ok: true }) : c.json({ erreur: 'Non envoyé : ' + res.raison }, 502);
+});
+
+// ——— comportement des visiteurs ———
+admin.get('/comportement', async c => {
+  const jours = [7, 30, 90, 365].includes(Number(c.req.query('jours'))) ? Number(c.req.query('jours')) : 30;
+  const chemin = texte(c.req.query('chemin'), 200) || null;
+  const depuis = sql`now() - make_interval(days => ${jours})`;
+  const pages = await sql`
+    with v as (select chemin, visiteur, cree_le::date as j, min(cree_le) as debut, max(cree_le) as fin from visites
+               where evenement = 'vue' and cree_le >= ${depuis} group by 1, 2, 3),
+    prof as (select chemin, visiteur, cree_le::date as j, max(valeur) as p from visites
+             where evenement = 'defilement' and cree_le >= ${depuis} group by 1, 2, 3),
+    temps as (select chemin, avg(least(valeur, 1800))::int as t from visites where evenement = 'sortie' and valeur > 0 and cree_le >= ${depuis} group by 1),
+    derniere as (select distinct on (visiteur, cree_le::date) visiteur, cree_le::date as j, chemin from visites
+                 where evenement = 'vue' and cree_le >= ${depuis} order by visiteur, cree_le::date, cree_le desc),
+    premiere as (select distinct on (visiteur, cree_le::date) visiteur, cree_le::date as j, chemin from visites
+                 where evenement = 'vue' and cree_le >= ${depuis} order by visiteur, cree_le::date, cree_le),
+    dem as (select page as chemin, count(*)::int as n from demandes where cree_le >= ${depuis} group by 1)
+    select v.chemin, count(*)::int as visites,
+      coalesce(round(avg(coalesce(prof.p, 0))), 0)::int as profondeur,
+      count(*) filter (where prof.p >= 50)::int as a50, count(*) filter (where prof.p >= 75)::int as a75, count(*) filter (where prof.p >= 100)::int as a100,
+      (select t from temps where temps.chemin = v.chemin) as temps,
+      (select count(*) from derniere d where d.chemin = v.chemin)::int as sorties,
+      (select count(*) from premiere p where p.chemin = v.chemin)::int as entrees,
+      coalesce((select n from dem where dem.chemin = v.chemin), 0) as demandes
+    from v left join prof on prof.chemin = v.chemin and prof.visiteur = v.visiteur and prof.j = v.j
+    group by v.chemin order by visites desc limit 30`;
+  const choisi = chemin || pages[0]?.chemin || '/';
+  const [{ total }] = await sql`select count(distinct (visiteur, cree_le::date))::int as total from visites where evenement = 'vue' and chemin = ${choisi} and cree_le >= ${depuis}`;
+  const sections = await sql`
+    select cible as section, count(distinct (visiteur, cree_le::date))::int as visites, min(valeur) as ordre
+    from visites where evenement = 'section' and chemin = ${choisi} and cree_le >= ${depuis} and cible <> '' group by cible order by min(valeur) nulls last, 2 desc limit 30`;
+  const clics = await sql`
+    select cible, count(*)::int as n, count(distinct (visiteur, cree_le::date))::int as visites
+    from visites where evenement = 'clic' and chemin = ${choisi} and cree_le >= ${depuis} and cible <> '' group by cible order by 2 desc limit 15`;
+  const formulaire = await sql`
+    select coalesce(valeur, 1) as etape, count(distinct (visiteur, cree_le::date))::int as visites
+    from visites where evenement = 'formulaire' and chemin = ${choisi} and cree_le >= ${depuis} group by 1 order by 1`;
+  const [{ envoyes }] = await sql`select count(*)::int as envoyes from demandes where page = ${choisi} and cree_le >= ${depuis}`;
+  const clicsSite = await sql`
+    select cible, count(*)::int as n from visites where evenement in ('clic', 'whatsapp', 'communaute', 'appel') and cree_le >= ${depuis} and cible <> ''
+    group by cible order by 2 desc limit 12`;
+  return c.json({ jours, chemin: choisi, total, pages, sections, clics, formulaire, envoyes, clicsSite });
+});
+
+// ——— catalogue (logiciels ; plus tard formations, services) ———
+const TYPES = ['logiciel', 'formation', 'service', 'materiel'], CATEGORIES = ['assistance', 'outil', 'formation', 'autre'];
+admin.get('/produits', async c => c.json(await sql`
+  select p.*, (select count(*) from telechargements t where t.produit_id = p.id)::int as telechargements,
+    (select count(*) from telechargements t where t.produit_id = p.id and t.cree_le >= now() - interval '30 days')::int as telechargements_30j
+  from produits p order by p.ordre, p.nom`));
+
+function lireProduit(d) {
+  const f = {
+    type: TYPES.includes(d.type) ? d.type : 'logiciel', categorie: CATEGORIES.includes(d.categorie) ? d.categorie : 'outil',
+    nom: texte(d.nom, 120), slug: texte(d.slug, 62).toLowerCase(), resume: texte(d.resume, 400), description: String(d.description || '').slice(0, 5000).trim(),
+    prix: d.prix === '' || d.prix == null ? null : Number(d.prix), lien_externe: texte(d.lien_externe, 400), version: texte(d.version, 40),
+    systeme: texte(d.systeme, 120), publie: d.publie === true, ordre: Number.isInteger(Number(d.ordre)) ? Number(d.ordre) : 50,
+  };
+  if (f.nom.length < 2) return [null, 'Nom obligatoire.'];
+  if (!/^[a-z0-9][a-z0-9-]{1,60}$/.test(f.slug)) return [null, 'Adresse : lettres minuscules, chiffres et tirets.'];
+  if (f.prix !== null && (!Number.isInteger(f.prix) || f.prix < 0)) return [null, 'Prix invalide.'];
+  if (f.lien_externe) { try { const u = new URL(f.lien_externe); if (u.protocol !== 'https:') throw 0; } catch { return [null, 'Le lien de téléchargement doit commencer par https://'] } }
+  return [f, null];
+}
+admin.post('/produits', async c => {
+  if (!estAdmin(c)) return refuse(c);
+  const [f, err] = lireProduit((await corps(c)) || {});
+  if (err) return c.json({ erreur: err }, 400);
+  try { const [r] = await sql`insert into produits ${sql(f)} returning id`; return c.json({ id: r.id }, 201); }
+  catch (e) { if (e.code === '23505') return c.json({ erreur: 'Cette adresse existe déjà.' }, 409); throw e; }
+});
+admin.patch('/produits/:id', async c => {
+  if (!estAdmin(c)) return refuse(c);
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Produit introuvable.' }, 404);
+  const [f, err] = lireProduit((await corps(c)) || {});
+  if (err) return c.json({ erreur: err }, 400);
+  try { const r = await sql`update produits set ${sql(f)}, modifie_le = now() where id = ${id}`; return r.count ? c.json({ ok: true }) : c.json({ erreur: 'Produit introuvable.' }, 404); }
+  catch (e) { if (e.code === '23505') return c.json({ erreur: 'Cette adresse existe déjà.' }, 409); throw e; }
+});
+admin.delete('/produits/:id', async c => {
+  if (!estAdmin(c)) return refuse(c);
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Produit introuvable.' }, 404);
+  const [p] = await sql`delete from produits where id = ${id} returning fichier`;
+  if (!p) return c.json({ erreur: 'Produit introuvable.' }, 404);
+  await supprimerFichier(p.fichier);
+  return c.json({ ok: true });
+});
+// envoi du fichier d'un logiciel (admin) : liste blanche, contrôle du contenu, nom aléatoire sur le serveur
+admin.post('/produits/:id/fichier', async c => {
+  if (!estAdmin(c)) return refuse(c);
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Produit introuvable.' }, 404);
+  const [p] = await sql`select fichier from produits where id = ${id}`;
+  if (!p) return c.json({ erreur: 'Produit introuvable.' }, 404);
+  const form = await c.req.parseBody().catch(() => null);
+  const fichier = form?.fichier;
+  if (!fichier || typeof fichier === 'string') return c.json({ erreur: 'Aucun fichier reçu.' }, 400);
+  try {
+    const f = await enregistrerFichier(fichier);
+    await sql`update produits set fichier = ${f.fichier}, fichier_nom = ${f.fichier_nom}, taille = ${f.taille}, modifie_le = now() where id = ${id}`;
+    await supprimerFichier(p.fichier);
+    return c.json({ ok: true, ...f, fichier: undefined });
+  } catch (e) { if (e.statut) return c.json({ erreur: e.message }, e.statut); throw e; }
+});
+
+// ——— ambassadeurs et fidélité ———
+admin.get('/ambassadeurs', async c => c.json(await sql`
+  select m.id, m.nom, m.email, m.tel, m.code, m.actif, m.cree_le, m.derniere_connexion, p.nom as parrain,
+    coalesce((select sum(points) from points where membre_id = m.id), 0)::int as solde,
+    (select count(*) from demandes where parrain_id = m.id)::int as filleuls,
+    (select count(*) from demandes where parrain_id = m.id and etat = 'client')::int as clients,
+    (select count(*) from membres f where f.parrain_id = m.id)::int as inscrits
+  from membres m left join membres p on p.id = m.parrain_id order by solde desc, m.cree_le desc limit 500`));
+
+admin.get('/ambassadeurs/:id', async c => {
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Membre introuvable.' }, 404);
+  const [m] = await sql`select id, nom, email, tel, code, actif, cree_le from membres where id = ${id}`;
+  if (!m) return c.json({ erreur: 'Membre introuvable.' }, 404);
+  const historique = await sql`select p.points, p.motif, p.detail, p.cree_le, e.nom as auteur from points p left join equipe e on e.id = p.auteur_id where p.membre_id = ${id} order by p.cree_le desc limit 200`;
+  const filleuls = await sql`select id, nom, organisation, etat, cree_le from demandes where parrain_id = ${id} order by cree_le desc limit 200`;
+  return c.json({ membre: m, historique, filleuls });
+});
+
+admin.post('/ambassadeurs/:id/points', async c => {
+  if (!estAdmin(c)) return refuse(c);
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Membre introuvable.' }, 404);
+  const d = await corps(c);
+  const n = Number(d?.points), motif = d?.motif === 'correction' ? 'correction' : 'bonus', detail = texte(d?.detail, 200);
+  if (!Number.isInteger(n) || n === 0 || Math.abs(n) > 100000) return c.json({ erreur: 'Nombre de points invalide.' }, 400);
+  if (!detail) return c.json({ erreur: 'Indiquez la raison.' }, 400);
+  const [m] = await sql`select id from membres where id = ${id}`;
+  if (!m) return c.json({ erreur: 'Membre introuvable.' }, 404);
+  await sql`insert into points (membre_id, points, motif, detail, auteur_id) values (${id}, ${n}, ${motif}, ${detail}, ${c.get('membre').id})`;
+  return c.json({ ok: true }, 201);
+});
+
+admin.patch('/ambassadeurs/:id', async c => {
+  if (!estAdmin(c)) return refuse(c);
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Membre introuvable.' }, 404);
+  const d = await corps(c);
+  if (typeof d?.actif !== 'boolean') return c.json({ erreur: 'Rien à modifier.' }, 400);
+  const r = await sql`update membres set actif = ${d.actif} where id = ${id}`;
+  if (!d.actif) await sql`delete from sessions_membres where membre_id = ${id}`;
+  return r.count ? c.json({ ok: true }) : c.json({ erreur: 'Membre introuvable.' }, 404);
+});
+
+admin.get('/echanges', async c => {
+  const statut = ['demande', 'accorde', 'refuse'].includes(c.req.query('statut')) ? c.req.query('statut') : 'demande';
+  return c.json(await sql`select e.id, e.recompense, e.points, e.statut, e.cree_le, e.traite_le, e.note, m.nom, m.tel, m.email
+    from echanges e join membres m on m.id = e.membre_id where e.statut = ${statut} order by e.cree_le desc limit 200`);
+});
+
+// accorder ou refuser un échange ; un refus rend les points (ligne inverse dans le registre)
+admin.patch('/echanges/:id', async c => {
+  const id = c.req.param('id');
+  if (!estUuid(id)) return c.json({ erreur: 'Échange introuvable.' }, 404);
+  const d = await corps(c);
+  if (!['accorde', 'refuse'].includes(d?.statut)) return c.json({ erreur: 'Statut inconnu.' }, 400);
+  const res = await sql.begin(async t => {
+    const [e] = await t`select membre_id, points, recompense, statut from echanges where id = ${id} for update`;
+    if (!e) return 404;
+    if (e.statut !== 'demande') return 409;
+    await t`update echanges set statut = ${d.statut}, traite_le = now(), traite_par = ${c.get('membre').id}, note = ${texte(d.note, 300)} where id = ${id}`;
+    if (d.statut === 'refuse') await t`insert into points (membre_id, points, motif, detail, echange_id, auteur_id) values (${e.membre_id}, ${e.points}, 'echange_refuse', ${'Points rendus : ' + e.recompense}, ${id}, ${c.get('membre').id})`;
+    return 200;
+  });
+  if (res === 404) return c.json({ erreur: 'Échange introuvable.' }, 404);
+  if (res === 409) return c.json({ erreur: 'Cet échange a déjà été traité.' }, 409);
+  return c.json({ ok: true });
 });

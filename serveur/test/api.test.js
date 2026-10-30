@@ -47,7 +47,9 @@ before(async () => {
 after(async () => { await sql.end(); });
 beforeEach(async () => {
   viderLimites(); cookie = '';
-  await sql`truncate demandes, notes, avis, visites, campagnes, sessions, equipe restart identity cascade`;
+  await sql`truncate points, echanges, sessions_membres, jetons_membres, telechargements, notes, demandes, avis, visites, campagnes, sessions restart identity`;
+  await sql`delete from equipe`; // pas de « truncate … cascade » : il viderait aussi les réglages (barème de points, modèles d'e-mails)
+  await sql`delete from membres`;
 });
 
 // ——— API publique ———

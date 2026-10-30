@@ -9,6 +9,8 @@ export const config = {
   origines: liste(env.ORIGINES_AUTORISEES || 'http://localhost:4381'),
   // adresse publique du back-office (sert au contrôle d'origine des actions et aux liens des e-mails)
   adresse: (env.ADRESSE_PUBLIQUE || 'http://localhost:3000').replace(/\/$/, ''),
+  // dossier des fichiers du catalogue (volume persistant dans Coolify)
+  dossierFichiers: env.DOSSIER_FICHIERS || './donnees/fichiers',
   // adresse du site public (liens des campagnes)
   sitePublic: (env.SITE_PUBLIC || 'https://zeltuminitiative-com.github.io/zti-site').replace(/\/$/, ''),
   // secret qui sert à calculer l'empreinte anonyme du jour des visiteurs (jamais l'adresse IP)

@@ -5,10 +5,12 @@ import { sql } from '../db.js';
 import { config } from '../config.js';
 import { alerter, accuserReception } from '../notifier.js';
 import { texte, telephone, estEmail, domaine, appareil, empreinteVisiteur, adresseIp, limiter } from '../securite.js';
+import { servirFichier } from '../fichiers.js';
 
 export const publique = new Hono();
 
-const EVENEMENTS = ['vue', 'etape2', 'whatsapp', 'communaute', 'appel'];
+// événements que le navigateur peut envoyer (« demande », « avis », « inscription » et « telechargement » sont posés par le serveur)
+const EVENEMENTS = ['vue', 'defilement', 'section', 'clic', 'sortie', 'formulaire', 'etape2', 'whatsapp', 'communaute', 'appel'];
 const UTM = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'];
 
 // CORS : seuls les sites de ZTi peuvent appeler l'API depuis un navigateur
@@ -70,8 +72,14 @@ publique.post('/demandes', async c => {
     ...Object.fromEntries(UTM.map(k => [k, texte(d[k], 120)])),
     visiteur: empreinteVisiteur(c),
   };
+  // ambassadeur : code valide, compte actif, et jamais soi-même (même téléphone ou même e-mail)
+  const code = texte(d.parrain, 40).toLowerCase();
+  if (code) {
+    const [p] = await sql`select id, tel, email from membres where lower(code) = ${code} and actif`;
+    if (p && p.tel !== tel && (!email || p.email.toLowerCase() !== email.toLowerCase())) f.parrain_id = p.id;
+  }
   const [ligne] = await sql`insert into demandes ${sql(f)} returning id`;
-  await enregistrerEvenement(c, 'demande', { chemin: f.page || '/', ...f });
+  await enregistrerEvenement(c, 'demande', { chemin: f.page || '/', ...f, parrain: code });
 
   accuserReception(f).catch(e => console.error('Accusé de réception :', e.message));
   alerter('demandes', `Nouvelle demande — ${f.sujet || 'Site'} — ${f.organisation || f.nom}`, [
@@ -118,14 +126,14 @@ publique.get('/avis', async c => {
 
 // ——— mesure d'audience : une page vue ou une action (clic WhatsApp, étape 2 du formulaire…) ———
 publique.post('/visites', async c => {
-  if (!limiter('visite:' + adresseIp(c), 120, 60_000)) return c.body(null, 204);
+  if (!limiter('visite:' + adresseIp(c), 240, 60_000)) return c.body(null, 204);
   const d = await corps(c);
   if (!d || !EVENEMENTS.includes(d.evenement || 'vue')) return c.body(null, 204);
   await enregistrerEvenement(c, d.evenement || 'vue', d);
   return c.body(null, 204);
 });
 
-async function enregistrerEvenement(c, evenement, d) {
+export async function enregistrerEvenement(c, evenement, d) {
   const chemin = texte(d.chemin, 200);
   if (!chemin.startsWith('/')) return;
   const ua = c.req.header('user-agent') || '';
@@ -135,5 +143,33 @@ async function enregistrerEvenement(c, evenement, d) {
     evenement, chemin, referent: domaine(d.referent),
     ...Object.fromEntries(UTM.map(k => [k, texte(d[k], 120)])),
     visiteur: empreinteVisiteur(c), appareil: appareil(ua), pays: /^[A-Z]{2}$/.test(pays) && pays !== 'XX' ? pays : '',
+    valeur: Number.isInteger(d.valeur) && d.valeur >= 0 && d.valeur <= 100000 ? d.valeur : null,
+    cible: texte(d.cible, 80), parrain: texte(d.parrain, 40).toLowerCase(),
   })}`;
 }
+
+// ——— catalogue : logiciels à télécharger (et plus tard formations, services) ———
+publique.get('/produits', async c => {
+  const type = ['logiciel', 'formation', 'service', 'materiel'].includes(c.req.query('type')) ? c.req.query('type') : null;
+  const liste = await sql`
+    select slug, type, categorie, nom, resume, description, prix, version, systeme, taille,
+      (fichier <> '' or lien_externe <> '') as disponible, lien_externe <> '' as externe
+    from produits where publie and (${type}::text is null or type = ${type}) order by ordre, nom`;
+  c.header('Cache-Control', 'public, max-age=120');
+  return c.json(liste);
+});
+
+// téléchargement : gratuit → fichier ou page officielle de l'éditeur ; payant → pas encore (boutique à venir)
+publique.get('/telecharger/:slug', async c => {
+  const slug = texte(c.req.param('slug'), 62).toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{1,60}$/.test(slug)) return c.json({ erreur: 'Introuvable.' }, 404);
+  if (!limiter('dl:' + adresseIp(c), 30, 60 * 60_000)) return trop(c);
+  const [p] = await sql`select id, nom, prix, lien_externe, fichier, fichier_nom from produits where slug = ${slug} and publie`;
+  if (!p) return c.json({ erreur: 'Introuvable.' }, 404);
+  if (p.prix) return c.json({ erreur: 'Ce logiciel est payant : contactez ZTi pour l\'obtenir.', payant: true }, 402);
+  if (!p.fichier && !p.lien_externe) return c.json({ erreur: 'Bientôt disponible.' }, 404);
+  await sql`insert into telechargements (produit_id, visiteur) values (${p.id}, ${empreinteVisiteur(c)})`;
+  await enregistrerEvenement(c, 'telechargement', { chemin: '/telechargements/', cible: slug });
+  if (p.lien_externe) return c.redirect(p.lien_externe, 302);
+  return servirFichier(c, p.fichier, p.fichier_nom);
+});
