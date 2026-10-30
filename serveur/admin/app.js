@@ -229,12 +229,12 @@ function afficherConnexion() {
 }
 
 // ——— mise en page ———
-const MENU = [['#/', 'Tableau de bord'], ['#/demandes', 'Suivi des clients'], ['#/avis', 'Avis'], ['#/campagnes', 'Campagnes'], ['#/equipe', 'Équipe'], ['#/reglages', 'E-mails et réglages'], ['#/compte', 'Mon compte']];
+const MENU = [['#/', 'Tableau de bord'], ['#/demandes', 'Suivi des clients'], ['#/comportement', 'Comportement'], ['#/campagnes', 'Campagnes'], ['#/avis', 'Avis'], ['#/ambassadeurs', 'Ambassadeurs'], ['#/catalogue', 'Catalogue'], ['#/equipe', 'Équipe'], ['#/reglages', 'E-mails et réglages'], ['#/compte', 'Mon compte']];
 let compteurs = {};
 function cadre(contenu) {
   const route = location.hash.replace(/\/[0-9a-f-]{36}$/, '') || '#/';
   const lien = ([href, texte]) => {
-    const n = href === '#/demandes' ? compteurs.a_traiter : href === '#/avis' ? compteurs.avis_en_attente : 0;
+    const n = href === '#/demandes' ? compteurs.a_traiter : href === '#/avis' ? compteurs.avis_en_attente : href === '#/ambassadeurs' ? compteurs.echanges_en_attente : 0;
     return h('a', { href, 'aria-current': (route === href || (href === '#/' && route === '#')) ? 'page' : undefined }, texte, n ? h('span', { class: 'pastille' }, n) : null);
   };
   const menu = MENU.filter(([href]) => moi.role === 'admin' || !['#/equipe'].includes(href));
@@ -253,6 +253,7 @@ const entete = (titre, sousTitre, ...actions) => h('div', { class: 'entete-page'
 const ROUTES = {
   '#/': vueTableau, '#/demandes': vueDemandes, '#/demande': vueFiche, '#/avis': vueAvis, '#/campagnes': vueCampagnes,
   '#/equipe': vueEquipe, '#/reglages': vueReglages, '#/compte': vueCompte,
+  '#/comportement': vueComportement, '#/catalogue': () => vueCatalogue(), '#/ambassadeurs': vueAmbassadeurs,
 };
 async function router() {
   if (!moi) return afficherConnexion();
@@ -295,6 +296,10 @@ async function vueTableau() {
       lienCarte('#/demandes', carteChiffre('À relancer', nombre(c.a_relancer), 'Date de relance atteinte', c.a_relancer > 0)),
       lienCarte('#/avis', carteChiffre('Avis à valider', nombre(c.avis_en_attente), 'En attente de publication', c.avis_en_attente > 0)),
       carteChiffre('Clics WhatsApp et communauté', nombre(c.clics_contact), 'Boutons de contact du site')),
+    h('div', { class: 'grille g3', style: 'margin-top:16px' },
+      lienCarte('#/ambassadeurs', carteChiffre('Nouveaux ambassadeurs', nombre(c.nouveaux_membres), 'Inscrits dans l\'espace membre')),
+      carteChiffre('Demandes recommandées', nombre(c.demandes_recommandees), 'Venues d\'un ambassadeur'),
+      lienCarte('#/ambassadeurs', carteChiffre('Échanges à traiter', nombre(c.echanges_en_attente), 'Récompenses demandées', c.echanges_en_attente > 0))),
     h('div', { class: 'grille g2', style: 'margin-top:16px' },
       h('div', { class: 'carte graphique' }, h('h2', {}, 'Visites et demandes par jour'), graphique(t.parJour),
         h('div', { class: 'legende' }, h('span', {}, h('i', { style: 'background:#1565FF' }), 'Visites'), h('span', {}, h('i', { style: 'background:#12A15E' }), 'Demandes'))),
@@ -573,10 +578,24 @@ async function vueReglages() {
   const accSujet = h('input', { value: r.accuse_demande?.sujet || '', disabled: !admin || undefined });
   const accTexte = h('textarea', { value: r.accuse_demande?.texte || '', style: 'min-height:220px', disabled: !admin || undefined });
   const signature = h('textarea', { value: r.signature?.texte || '', style: 'min-height:70px', disabled: !admin || undefined });
+  const fid = r.fidelite || {};
+  const fidActif = interrupteur('Programme ambassadeurs ouvert', { coche: fid.actif !== false, desactive: !admin });
+  const ptsReco = champMontant(fid.points_recommandation ?? 10, { placeholder: 'points', disabled: !admin || undefined });
+  const ptsClient = champMontant(fid.points_client ?? 100, { placeholder: 'points', disabled: !admin || undefined });
+  const ptsBienvenue = champMontant(fid.points_bienvenue ?? 0, { placeholder: 'points', disabled: !admin || undefined });
+  const lignesRecompenses = h('div', { class: 'grille' });
+  const ajouterRecompense = (nom = '', points = '') => {
+    const n = h('input', { value: nom, placeholder: 'Récompense', disabled: !admin || undefined }), p = champMontant(points, { placeholder: 'points', disabled: !admin || undefined });
+    const ligne = h('div', { class: 'ligne-recompense' }, n, p, admin ? h('button', { class: 'btn danger petit', type: 'button', onclick: () => ligne.remove() }, 'Retirer') : null);
+    ligne.lire = () => ({ nom: n.value.trim(), points: p.nombre || 0 }); lignesRecompenses.append(ligne);
+  };
+  (fid.recompenses || []).forEach(x => ajouterRecompense(x.nom, x.points));
   const enregistrer = admin ? h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
     await api('/reglages', { methode: 'PUT', corps: {
       alertes: { destinataires: dest.value.split(',').map(s => s.trim()).filter(Boolean), demandes: alDem.coche, avis: alAvis.coche },
-      accuse_demande: { actif: accActif.coche, sujet: accSujet.value, texte: accTexte.value }, signature: { texte: signature.value } } });
+      accuse_demande: { actif: accActif.coche, sujet: accSujet.value, texte: accTexte.value }, signature: { texte: signature.value },
+      fidelite: { actif: fidActif.coche, points_recommandation: ptsReco.nombre || 0, points_client: ptsClient.nombre || 0, points_bienvenue: ptsBienvenue.nombre || 0,
+        recompenses: [...lignesRecompenses.children].map(l => l.lire()).filter(x => x.nom && x.points > 0) } } });
     toast('Réglages enregistrés.');
   }, e.currentTarget) }, 'Enregistrer') : null;
   const essai = h('button', { class: 'btn second', type: 'button', onclick: e => essayer(async () => { await api('/reglages/essai', { methode: 'POST' }); toast('E-mail d\'essai envoyé à ' + moi.email + '.'); }, e.currentTarget) }, 'M\'envoyer un e-mail d\'essai');
@@ -593,6 +612,10 @@ async function vueReglages() {
       h('div', { class: 'carte formulaire' }, h('h2', {}, 'Accusé de réception au client'),
         h('p', { class: 'muet', style: 'margin:0' }, 'Envoyé automatiquement quand la personne a donné son e-mail. Vous pouvez écrire {prenom}, {nom} ou {organisation}.'),
         accActif, h('label', {}, 'Sujet', accSujet), h('label', {}, 'Texte', accTexte))),
+    h('div', { class: 'carte formulaire', style: 'margin-top:16px' }, h('h2', {}, 'Programme ambassadeurs (fidélité)'), fidActif,
+      h('div', { class: 'grille g3' }, h('label', {}, 'Points quand ZTi confirme une demande recommandée', ptsReco), h('label', {}, 'Points quand elle devient cliente', ptsClient), h('label', {}, 'Points de bienvenue', ptsBienvenue)),
+      h('h3', {}, 'Récompenses à échanger contre des points'), lignesRecompenses,
+      admin ? h('div', { class: 'actions' }, h('button', { class: 'btn second petit', type: 'button', onclick: () => ajouterRecompense() }, 'Ajouter une récompense')) : null),
     admin ? h('div', { class: 'actions', style: 'margin-top:16px' }, enregistrer) : null,
   ]);
 }
@@ -613,4 +636,165 @@ function vueCompte(force = false) {
     h('label', {}, force ? 'Mot de passe provisoire' : 'Mot de passe actuel', actuel), h('label', {}, 'Nouveau mot de passe (10 caractères au moins)', nouveau),
     h('label', {}, 'Confirmez le nouveau mot de passe', confirmation), h('div', { class: 'actions' }, valider));
   cadre([entete('Mon compte', moi.nom + ' · ' + moi.email), formulaire]);
+}
+
+// ——— COMPORTEMENT DES VISITEURS ———
+let pageComportement = null;
+async function vueComportement() {
+  const t = await api('/comportement?jours=' + periode + (pageComportement ? '&chemin=' + encodeURIComponent(pageComportement) : ''));
+  const choixPeriode = h('div', { class: 'onglets', role: 'group', 'aria-label': 'Période' },
+    [[7, '7 jours'], [30, '30 jours'], [90, '3 mois'], [365, '1 an']].map(([j, l]) =>
+      h('button', { type: 'button', 'aria-pressed': String(j === periode), onclick: () => { periode = j; vueComportement(); } }, l)));
+  const choixPage = t.pages.length ? menu(t.pages.map(p => [p.chemin, p.chemin]), { valeur: t.chemin, libelle: 'Page analysée', onchange: v => { pageComportement = v; vueComportement(); } }) : null;
+  const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+  const duree = s => s == null ? '—' : s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0');
+  const pageChoisie = t.pages.find(p => p.chemin === t.chemin) || { visites: t.total };
+  const etapesForm = [...t.formulaire.map(f => ['Étape ' + f.etape + ' commencée', f.visites]), ['Demande envoyée', t.envoyes]];
+  cadre([
+    entete('Comportement des visiteurs', 'Ce que font les visiteurs sur chaque page : jusqu\'où ils lisent, ce qu\'ils cliquent, où ils partent.', choixPeriode),
+    h('div', { class: 'carte defile-x' }, h('h2', {}, 'Toutes les pages'),
+      t.pages.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Page', 'Visites', 'Lu en moyenne', 'Lu à 75 %', 'Temps moyen', 'Arrivées ici', 'Quittent ici', 'Demandes'].map((x, i) => h('th', { class: i ? 'n' : '' }, x)))),
+        h('tbody', {}, t.pages.map(p => h('tr', { class: 'clic', onclick: () => { pageComportement = p.chemin; vueComportement(); } },
+          h('td', {}, h('b', {}, p.chemin)), h('td', { class: 'n' }, nombre(p.visites)), h('td', { class: 'n' }, p.profondeur + ' %'),
+          h('td', { class: 'n' }, pct(p.a75, p.visites) + ' %'), h('td', { class: 'n' }, duree(p.temps)), h('td', { class: 'n' }, nombre(p.entrees)),
+          h('td', { class: 'n' + (pct(p.sorties, p.visites) > 60 ? ' alerte-texte' : '') }, pct(p.sorties, p.visites) + ' %'), h('td', { class: 'n' }, nombre(p.demandes))))))
+        : h('p', { class: 'vide' }, 'Les données apparaîtront dès les premières visites du site.')),
+    t.pages.length ? h('div', { class: 'actions', style: 'margin:22px 0 12px' }, h('h2', {}, 'Analyse de la page'), choixPage) : null,
+    t.pages.length ? h('div', { class: 'grille g3' },
+      h('div', { class: 'carte' }, h('h2', {}, 'Jusqu\'où ils lisent'), h('p', { class: 'muet' }, 'Part des visites qui atteignent chaque section, de haut en bas. Une forte baisse = l\'endroit où ils décrochent.'),
+        t.sections.length ? h('div', { class: 'entonnoir', style: 'margin-top:12px' }, t.sections.map(s => h('div', {}, h('span', {}, s.section),
+          h('div', { class: 'barre' }, h('i', { style: `width:${Math.max(2, pct(s.visites, t.total))}%` })), h('b', {}, pct(s.visites, t.total) + ' %'))))
+          : h('p', { class: 'vide' }, 'Pas encore de données.')),
+      h('div', { class: 'carte' }, h('h2', {}, 'Ce qu\'ils cliquent'), barres(t.clics.map(c => [c.cible, c.n]))),
+      h('div', { class: 'carte' }, h('h2', {}, 'Le formulaire de la page'), h('p', { class: 'muet' }, 'Où ils abandonnent, étape par étape.'),
+        etapesForm.length > 1 ? h('div', { class: 'entonnoir', style: 'margin-top:12px' }, etapesForm.map(([l, n]) => h('div', {}, h('span', {}, l),
+          h('div', { class: 'barre' }, h('i', { style: `width:${Math.max(2, pct(n, pageChoisie.visites))}%` })), h('b', {}, nombre(n)))))
+          : h('p', { class: 'vide' }, 'Personne n\'a encore commencé le formulaire de cette page.'))) : null,
+    t.clicsSite.length ? h('div', { class: 'carte', style: 'margin-top:16px' }, h('h2', {}, 'Boutons les plus cliqués sur tout le site'), barres(t.clicsSite.map(c => [c.cible, c.n]))) : null,
+  ]);
+}
+
+// ——— CATALOGUE ———
+const TYPES_PRODUIT = [['logiciel', 'Logiciel'], ['formation', 'Formation'], ['service', 'Service'], ['materiel', 'Matériel']];
+const CATEGORIES_PRODUIT = [['assistance', 'Assistance à distance'], ['outil', 'Outil créé par ZTi'], ['formation', 'Formation'], ['autre', 'Autre']];
+async function vueCatalogue(edition = null) {
+  const liste = await api('/produits');
+  const admin = moi.role === 'admin';
+  const p = edition || { type: 'logiciel', categorie: 'outil', nom: '', slug: '', resume: '', description: '', prix: null, lien_externe: '', version: '', systeme: 'Windows', publie: false, ordre: 50 };
+  const champs = {
+    nom: h('input', { value: p.nom, oninput: e => { if (!edition) champs.slug.value = slug(e.target.value); } }), slug: h('input', { value: p.slug }),
+    type: menu(TYPES_PRODUIT, { valeur: p.type, libelle: 'Type' }), categorie: menu(CATEGORIES_PRODUIT, { valeur: p.categorie, libelle: 'Rubrique' }),
+    resume: h('textarea', { value: p.resume, style: 'min-height:70px' }), description: h('textarea', { value: p.description || '', style: 'min-height:90px' }),
+    prix: champMontant(p.prix), lien_externe: h('input', { value: p.lien_externe || '', placeholder: 'https://… (page officielle de l\'éditeur)' }),
+    version: h('input', { value: p.version || '' }), systeme: h('input', { value: p.systeme || '' }),
+    publie: interrupteur('Visible sur la page Téléchargements', { coche: p.publie }),
+  };
+  const enregistrer = h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
+    const corps = { nom: champs.nom.value, slug: champs.slug.value, type: champs.type.valeur, categorie: champs.categorie.valeur, resume: champs.resume.value,
+      description: champs.description.value, prix: champs.prix.nombre, lien_externe: champs.lien_externe.value, version: champs.version.value,
+      systeme: champs.systeme.value, publie: champs.publie.coche, ordre: p.ordre };
+    const r = await api(edition ? '/produits/' + edition.id : '/produits', { methode: edition ? 'PATCH' : 'POST', corps });
+    toast(edition ? 'Produit enregistré.' : 'Produit créé. Ajoutez son fichier si besoin.');
+    vueCatalogue(edition ? null : { ...corps, id: r.id });
+  }, e.currentTarget) }, edition ? 'Enregistrer' : 'Créer');
+  // envoi du fichier : bouton maison qui ouvre le choix de fichier (le champ natif reste caché)
+  const entree = h('input', { type: 'file', class: 'cache', accept: '.zip,.exe,.msi,.7z,.pdf' });
+  const etatFichier = h('span', { class: 'muet' }, edition?.fichier_nom ? 'Fichier actuel : ' + edition.fichier_nom + (edition.taille ? ' (' + Math.round(edition.taille / 1024) + ' Ko)' : '') : 'Aucun fichier sur le serveur.');
+  entree.addEventListener('change', () => essayer(async () => {
+    const f = entree.files[0]; if (!f) return;
+    etatFichier.textContent = 'Envoi de ' + f.name + '…';
+    const donnees = new FormData(); donnees.append('fichier', f);
+    const r = await fetch('/v1/admin/produits/' + edition.id + '/fichier', { method: 'POST', body: donnees, credentials: 'same-origin' });
+    const j = await r.json(); if (!r.ok) { etatFichier.textContent = ''; throw new Error(j.erreur); }
+    toast('Fichier envoyé.'); vueCatalogue({ ...edition, fichier_nom: j.fichier_nom, taille: j.taille });
+  }));
+  const zoneFichier = edition?.id ? h('div', { class: 'champ-groupe' }, h('span', { class: 'champ-titre' }, 'Fichier à télécharger (ZIP, EXE, MSI, 7Z ou PDF, 300 Mo au plus)'),
+    h('div', { class: 'actions' }, h('button', { class: 'btn second', type: 'button', onclick: () => entree.click() }, 'Choisir un fichier'), etatFichier), entree,
+    h('p', { class: 'muet', style: 'margin:0' }, 'Un outil en .bat : mettez-le dans un fichier ZIP.')) : h('p', { class: 'muet' }, 'Créez le produit, puis ajoutez son fichier.');
+  const tarif = x => x.prix ? fcfa(x.prix) : 'Gratuit';
+  cadre([
+    entete('Catalogue', 'Les logiciels de la page Téléchargements. Plus tard : formations, services et boutique.'),
+    h('div', { class: 'grille g2' },
+      h('div', { class: 'carte defile-x' }, h('table', {}, h('thead', {}, h('tr', {}, ['Produit', 'Prix', 'Téléchargements', 'État', ''].map((x, i) => h('th', { class: i === 2 ? 'n' : '' }, x)))),
+        h('tbody', {}, liste.map(x => h('tr', {},
+          h('td', {}, h('b', {}, x.nom), h('div', { class: 'muet' }, (CATEGORIES_PRODUIT.find(c => c[0] === x.categorie) || ['', ''])[1] + (x.version ? ' · v' + x.version : ''))),
+          h('td', {}, tarif(x)), h('td', { class: 'n' }, nombre(x.telechargements), h('div', { class: 'muet' }, nombre(x.telechargements_30j) + ' sur 30 j')),
+          h('td', {}, x.publie ? h('span', { class: 'etiquette e-client' }, 'En ligne') : h('span', { class: 'etiquette e-sans_suite' }, 'Brouillon'),
+            !x.fichier && !x.lien_externe ? h('div', { class: 'muet' }, 'Sans fichier') : null),
+          h('td', {}, admin ? h('div', { class: 'actions' }, h('button', { class: 'btn second petit', type: 'button', onclick: () => { vueCatalogue(x); scrollTo(0, 0); } }, 'Modifier'),
+            h('button', { class: 'btn danger petit', type: 'button', onclick: e => essayer(async () => {
+              if (!(await confirmer({ titre: 'Supprimer « ' + x.nom + ' » ?', texte: 'Le produit et son fichier seront effacés.', bouton: 'Supprimer', danger: true }))) return;
+              await api('/produits/' + x.id, { methode: 'DELETE' }); vueCatalogue();
+            }, e.currentTarget) }, 'Supprimer')) : null)))))),
+      admin ? h('div', { class: 'carte formulaire' }, h('h2', {}, edition?.id ? 'Modifier : ' + edition.nom : 'Nouveau produit'),
+        h('label', {}, 'Nom', champs.nom), h('label', {}, 'Adresse (dans le lien)', champs.slug),
+        h('div', { class: 'grille g2' }, champ('Type', champs.type), champ('Rubrique', champs.categorie)),
+        h('label', {}, 'Résumé (une ou deux phrases)', champs.resume), h('label', {}, 'Description', champs.description),
+        h('div', { class: 'grille g2' }, h('label', {}, 'Prix (vide = gratuit)', champs.prix), h('label', {}, 'Version', champs.version)),
+        h('label', {}, 'Systèmes', champs.systeme), h('label', {}, 'Ou lien de téléchargement officiel (logiciel d\'un éditeur)', champs.lien_externe),
+        zoneFichier, champs.publie,
+        h('p', { class: 'muet', style: 'margin:0' }, 'Un produit payant affiche « Nous contacter » tant que la boutique n\'est pas ouverte.'),
+        h('div', { class: 'actions' }, enregistrer, edition ? h('button', { class: 'btn second', type: 'button', onclick: () => vueCatalogue() }, 'Annuler') : null))
+        : h('div', { class: 'carte' }, h('p', { class: 'muet' }, 'Seuls les administrateurs modifient le catalogue.'))),
+  ]);
+}
+
+// ——— AMBASSADEURS ———
+const MOTIFS = { bienvenue: 'Bienvenue', recommandation: 'Recommandation confirmée', client: 'Filleul devenu client', bonus: 'Bonus', echange: 'Échange', echange_refuse: 'Points rendus', correction: 'Correction' };
+let ongletAmbassadeurs = 'liste';
+async function vueAmbassadeurs() {
+  const onglets = h('div', { class: 'onglets' }, [['liste', 'Ambassadeurs'], ['echanges', 'Échanges à traiter']].map(([v, l]) =>
+    h('button', { type: 'button', 'aria-pressed': String(v === ongletAmbassadeurs), onclick: () => { ongletAmbassadeurs = v; vueAmbassadeurs(); } }, l)));
+  if (ongletAmbassadeurs === 'echanges') {
+    const liste = await api('/echanges?statut=demande');
+    return cadre([entete('Ambassadeurs', 'Les récompenses demandées avec des points. Un refus rend les points.', onglets),
+      liste.length ? h('div', { class: 'grille g3' }, liste.map(e => h('div', { class: 'carte', style: 'display:grid;gap:8px' },
+        h('h2', {}, e.recompense), h('div', {}, h('b', {}, e.nom), h('div', { class: 'muet' }, e.tel + ' · ' + e.email), h('div', { class: 'muet' }, nombre(e.points) + ' points · ' + dateHeure(e.cree_le))),
+        h('div', { class: 'actions' },
+          h('button', { class: 'btn petit', type: 'button', onclick: ev => essayer(async () => { await api('/echanges/' + e.id, { methode: 'PATCH', corps: { statut: 'accorde' } }); toast('Échange accordé.'); vueAmbassadeurs(); }, ev.currentTarget) }, 'Accorder'),
+          h('button', { class: 'btn second petit', type: 'button', onclick: ev => essayer(async () => {
+            if (!(await confirmer({ titre: 'Refuser cet échange ?', texte: 'Les ' + e.points + ' points seront rendus à ' + e.nom + '.', bouton: 'Refuser' }))) return;
+            await api('/echanges/' + e.id, { methode: 'PATCH', corps: { statut: 'refuse' } }); toast('Échange refusé, points rendus.'); vueAmbassadeurs();
+          }, ev.currentTarget) }, 'Refuser')))))
+        : h('div', { class: 'carte vide' }, 'Aucun échange à traiter.')]);
+  }
+  const liste = await api('/ambassadeurs');
+  cadre([
+    entete('Ambassadeurs', 'Les membres qui recommandent ZTi. Leurs points montent quand ZTi confirme une demande recommandée, puis quand elle devient cliente.', onglets),
+    liste.length ? h('div', { class: 'carte defile-x' }, h('table', {}, h('thead', {}, h('tr', {}, ['Ambassadeur', 'Code', 'Points', 'Recommandations', 'Clients', 'Inscrit le'].map((x, i) => h('th', { class: i > 1 && i < 5 ? 'n' : '' }, x)))),
+      h('tbody', {}, liste.map(m => h('tr', { class: 'clic', onclick: () => vueAmbassadeur(m.id) },
+        h('td', {}, h('b', {}, m.nom), h('div', { class: 'muet' }, m.tel), !m.actif ? h('span', { class: 'etiquette e-sans_suite' }, 'Désactivé') : null),
+        h('td', { class: 'muet' }, m.code), h('td', { class: 'n' }, h('b', {}, nombre(m.solde))), h('td', { class: 'n' }, nombre(m.filleuls)),
+        h('td', { class: 'n' }, nombre(m.clients)), h('td', { class: 'muet' }, date(m.cree_le)))))))
+      : h('div', { class: 'carte vide' }, 'Aucun ambassadeur pour l\'instant. Les clients s\'inscrivent depuis l\'espace membre du site.'),
+  ]);
+}
+async function vueAmbassadeur(id) {
+  const { membre: m, historique, filleuls } = await api('/ambassadeurs/' + id);
+  const solde = historique.reduce((s, x) => s + x.points, 0);
+  const nb = champMontant(null, { placeholder: 'Ex. 50 ou -20' });
+  const signe = menu([['+', 'Ajouter'], ['-', 'Retirer']], { libelle: 'Ajouter ou retirer' });
+  const raison = h('input', { placeholder: 'Raison (visible dans l\'historique)' });
+  cadre([
+    entete(m.nom, m.email + ' · ' + m.tel + ' · code ' + m.code, h('button', { class: 'btn second', type: 'button', onclick: () => vueAmbassadeurs() }, '← Retour'),
+      moi.role === 'admin' ? h('button', { class: 'btn second', type: 'button', onclick: e => essayer(async () => {
+        await api('/ambassadeurs/' + id, { methode: 'PATCH', corps: { actif: !m.actif } }); toast(m.actif ? 'Compte désactivé.' : 'Compte réactivé.'); vueAmbassadeur(id);
+      }, e.currentTarget) }, m.actif ? 'Désactiver' : 'Réactiver') : null),
+    h('div', { class: 'grille g2' },
+      h('div', { class: 'grille' },
+        h('div', { class: 'carte chiffre' }, h('small', {}, 'Solde'), h('b', {}, nombre(solde) + ' points')),
+        moi.role === 'admin' ? h('div', { class: 'carte formulaire' }, h('h2', {}, 'Ajuster les points'), h('div', { class: 'grille g2' }, champ('Opération', signe), h('label', {}, 'Points', nb)), raison,
+          h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: e => essayer(async () => {
+            const n = nb.nombre; if (!n) throw new Error('Indiquez un nombre de points.');
+            await api('/ambassadeurs/' + id + '/points', { methode: 'POST', corps: { points: signe.valeur === '-' ? -n : n, motif: signe.valeur === '-' ? 'correction' : 'bonus', detail: raison.value } });
+            toast('Points enregistrés.'); vueAmbassadeur(id);
+          }, e.currentTarget) }, 'Enregistrer'))) : null,
+        h('div', { class: 'carte' }, h('h2', {}, 'Personnes recommandées'), filleuls.length ? h('table', {}, h('tbody', {}, filleuls.map(f =>
+          h('tr', { class: 'clic', onclick: () => { location.hash = '#/demandes/' + f.id; } }, h('td', {}, h('b', {}, f.nom), h('div', { class: 'muet' }, f.organisation)), h('td', {}, pastilleEtat(f.etat)), h('td', { class: 'muet' }, date(f.cree_le))))))
+          : h('p', { class: 'vide' }, 'Personne pour l\'instant.'))),
+      h('div', { class: 'carte' }, h('h2', {}, 'Historique des points'), historique.length ? h('table', {}, h('tbody', {}, historique.map(x => h('tr', {},
+        h('td', {}, h('b', {}, MOTIFS[x.motif] || x.motif), h('div', { class: 'muet' }, x.detail + (x.auteur ? ' · ' + x.auteur : ''))),
+        h('td', { class: 'n' + (x.points < 0 ? ' alerte-texte' : '') }, (x.points > 0 ? '+' : '') + nombre(x.points)), h('td', { class: 'muet' }, dateHeure(x.cree_le))))))
+        : h('p', { class: 'vide' }, 'Aucun mouvement.'))),
+  ]);
 }

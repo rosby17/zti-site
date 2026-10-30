@@ -183,3 +183,7 @@ dt { color: var(--gris); font-size: 13px; } dd { margin: 0; color: var(--encre);
 * { scrollbar-width: thin; scrollbar-color: #C7CFE6 transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: #C7CFE6; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; } ::-webkit-scrollbar-track { background: transparent; }
 .menu ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); }
+.cache { display: none; }
+.alerte-texte { color: var(--rouge); font-weight: 600; }
+.ligne-recompense { display: grid; grid-template-columns: 1fr 140px auto; gap: 10px; align-items: center; }
+@media (max-width: 600px) { .ligne-recompense { grid-template-columns: 1fr 100px; } }
