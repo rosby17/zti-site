@@ -49,5 +49,5 @@ bouton_principal:
   texte: Demander un diagnostic
   lien: /contact/
 mesures:
-  endpoint: ""
+  endpoint: "https://zti.148.113.249.178.sslip.io"
   pixel: ""
