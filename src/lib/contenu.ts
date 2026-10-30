@@ -65,3 +65,11 @@ export const PUBLICS: Record<string, string> = {
   institutions: 'Institutions',
   particuliers: 'Particuliers',
 };
+
+// icône d'un réseau social d'après son nom (Google Maps, Facebook, X…)
+export function iconeReseau(nom: string): string {
+  const n = nom.toLowerCase().trim();
+  if (n.includes('maps') || n.includes('google')) return 'carte';
+  if (n === 'x' || n.includes('twitter')) return 'x';
+  return ['facebook', 'linkedin', 'instagram', 'tiktok', 'youtube', 'whatsapp'].find(r => n.includes(r)) || 'lien';
+}
