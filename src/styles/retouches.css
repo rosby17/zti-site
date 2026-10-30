@@ -145,6 +145,6 @@ a.reseau:hover, a.reseau:focus-visible { background: rgba(21,101,255,.18); borde
 .diag-detail[hidden], .diagnostic [data-avis][hidden], .diagnostic .etape[hidden] { display: none; }
 .formulaire .diag-question, .sombre .formulaire .diag-question { color: #02008A; }
 .sombre .formulaire .diag-avis b { color: #02008A; }
-/* l'étiquette du bas passe en haut à droite : la tasse et l'ordinateur ZTi de la photo restent visibles */
-.puce-bas { top: 96px; bottom: auto; }
+/* l'étiquette « Votre partenaire » se place à gauche, au niveau de la plante : visage, ordinateur et tasse ZTi restent visibles */
+.puce-bas { top: 38%; bottom: auto; left: -26px; right: auto; }
 @media (max-width: 860px) { .puce-bas { top: auto; bottom: 12px; } }
