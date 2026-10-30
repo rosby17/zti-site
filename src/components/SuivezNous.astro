@@ -1,0 +1,30 @@
+---
+// « Suivez-nous » : tous les réseaux de ZTi, juste avant le pied de page de chaque page. Un réseau sans adresse
+// (Réglages du site › Réseaux sociaux) affiche « Bientôt disponible » ; la communauté WhatsApp vient de Réglages › Communauté.
+import Icone from './Icone.astro';
+import { reglages, iconeReseau } from '../lib/contenu';
+const r = await reglages();
+const cases = [
+  ...(r.reseaux || []).filter(x => x.nom).map(x => ({ nom: x.nom, adresse: (x.adresse || '').trim(), icone: iconeReseau(x.nom) })),
+  { nom: 'Communauté WhatsApp', adresse: (r.communaute?.whatsapp || '').trim(), icone: 'whatsapp' },
+];
+---
+<section class="section fond-nuit sombre suivez-nous" aria-labelledby="suivez-nous-titre">
+  <div class="contenu centre">
+    <div class="rv">
+      <span class="etiquette">Suivez-nous</span>
+      <h2 id="suivez-nous-titre">{r.nom} sur les réseaux sociaux</h2>
+    </div>
+    <ul class="reseaux-grille">
+      {cases.map(c => (
+        <li class="rv">
+          {c.adresse
+            ? <a class="reseau" href={c.adresse} target="_blank" rel="noopener" data-communaute={c.nom}>
+                <Icone nom={c.icone as any} /><span><b>{c.nom}</b><small>{c.icone === 'whatsapp' ? 'Rejoindre' : 'Nous suivre'}</small></span>
+              </a>
+            : <span class="reseau bientot"><Icone nom={c.icone as any} /><span><b>{c.nom}</b><small>Bientôt disponible</small></span></span>}
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>

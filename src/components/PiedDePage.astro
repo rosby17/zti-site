@@ -1,12 +1,12 @@
 ---
 import Icone from './Icone.astro';
-import { reglages, services, lien } from '../lib/contenu';
+import { reglages, services, lien, iconeReseau } from '../lib/contenu';
 const { sansMenu = false } = Astro.props as { sansMenu?: boolean };
 const r = await reglages();
 const liste = await services();
 const reseaux = (r.reseaux || []).filter(x => x.nom && x.adresse);
 // icônes « Suivez ZTi » : les réseaux des réglages, puis WhatsApp
-const icone = (nom: string) => (['facebook', 'linkedin', 'instagram', 'tiktok', 'youtube', 'whatsapp'].find(n => nom.toLowerCase().includes(n)) || 'lien') as any;
+const icone = (nom: string) => iconeReseau(nom) as any;
 const suivre = [
   ...reseaux.map(x => ({ nom: x.nom, adresse: x.adresse, icone: icone(x.nom) })),
   ...(r.contact.whatsapp && !reseaux.some(x => icone(x.nom) === 'whatsapp') ? [{ nom: 'WhatsApp', adresse: `https://wa.me/${r.contact.whatsapp.replace(/\D/g, '')}`, icone: 'whatsapp' as any }] : []),

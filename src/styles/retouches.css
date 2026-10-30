@@ -96,3 +96,17 @@ body { background: var(--fond-clair); }
 /* en-tête : le petit texte à côté du logo tient sur deux lignes, et s'efface quand le menu est serré */
 .entete .marque small { white-space: nowrap; }
 @media (max-width: 1380px) and (min-width: 1101px) { .entete .marque small { display: none; } }
+
+/* ——— « Suivez-nous » : avant le pied de page de toutes les pages ——— */
+.suivez-nous { border-bottom: 1px solid rgba(255,255,255,.08); }
+.reseaux-grille { list-style: none; margin: 34px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; text-align: left; }
+.reseau { display: flex; align-items: center; gap: 14px; min-height: 76px; padding: 14px 18px; border-radius: 16px; color: #fff; text-decoration: none;
+  border: 1px solid rgba(159,208,255,.28); background: rgba(255,255,255,.04); transition: background-color .2s, border-color .2s, transform .2s; }
+.reseau svg { width: 22px; height: 22px; flex: none; color: #D7DCF3; }
+.reseau b { display: block; font: 700 15px var(--titres); color: #fff; }
+.reseau small { display: block; font-size: 13px; color: #9FD0FF; }
+a.reseau:hover, a.reseau:focus-visible { background: rgba(21,101,255,.18); border-color: rgba(159,208,255,.6); transform: translateY(-2px); }
+.reseau.bientot { border-style: dashed; border-color: rgba(215,220,243,.25); background: transparent; }
+.reseau.bientot small { color: #AEB6D6; }
+@media (max-width: 900px) { .reseaux-grille { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .reseaux-grille { grid-template-columns: 1fr; } }

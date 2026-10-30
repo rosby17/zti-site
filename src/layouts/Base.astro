@@ -13,6 +13,7 @@ import '../styles/zti.css';
 import '../styles/retouches.css';
 import EnTete from '../components/EnTete.astro';
 import PiedDePage from '../components/PiedDePage.astro';
+import SuivezNous from '../components/SuivezNous.astro';
 import { reglages, lien } from '../lib/contenu';
 
 interface Props { titre: string; description?: string; image?: string; sansMenu?: boolean; indexer?: boolean }
@@ -58,6 +59,7 @@ const pixel = (r.mesures?.pixel || '').trim();
   <a class="visuellement-cache" href="#contenu">Aller au contenu</a>
   <EnTete sansMenu={sansMenu} />
   <main id="contenu"><slot /></main>
+  <SuivezNous />
   <PiedDePage sansMenu={sansMenu} />
   <script>import '../scripts/site.js';</script>
 </body>

@@ -379,9 +379,10 @@ content:
       - name: reseaux
         type: object
         list: true
-        label: Réseaux sociaux (pied de page)
+        label: Réseaux sociaux (section « Suivez-nous » et pied de page)
+        description: "Adresse vide = la case affiche « Bientôt disponible »."
         fields:
-          - { name: nom, type: string, label: Nom (Facebook, LinkedIn…) }
+          - { name: nom, type: string, label: Nom (Google Maps, Facebook, YouTube, TikTok, LinkedIn, Instagram, X…) }
           - { name: adresse, type: string, label: Adresse de la page }
       - name: communaute
         type: object
