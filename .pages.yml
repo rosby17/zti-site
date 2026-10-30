@@ -245,8 +245,17 @@ components:
                 - { name: entreprise, label: Entreprise }
                 - { name: institution, label: Institution }
                 - { name: particulier, label: Particulier }
-          - { name: besoins, type: string, list: true, label: Besoins proposés, description: "Vide = la liste des services." }
-          - { name: court, type: boolean, label: Formulaire court (une seule étape), description: "Coché : seulement le profil, le besoin et les coordonnées. Décoché (conseillé) : deux étapes avec les questions sur la situation (nombre d'ordinateurs, urgence, prestataire, dépenses)." }
+          - name: formulaire
+            type: select
+            label: Formulaire
+            description: "Général (accueil, contact) : simple. Écoles : vocabulaire des établissements. Entreprises : 3 étapes. Particuliers : problème et appareil."
+            options:
+              values:
+                - { name: general, label: Général }
+                - { name: ecoles, label: Écoles }
+                - { name: entreprises, label: Entreprises (3 étapes) }
+                - { name: particuliers, label: Particuliers }
+          - { name: besoins, type: string, list: true, label: "Besoins proposés (général et écoles)", description: "Vide = la liste des services." }
           - { name: garanties, type: string, list: true, label: Points cochés à côté du formulaire }
           - { name: garanties_bouton, type: string, list: true, label: Garanties au-dessus du bouton }
           - { name: bouton, type: string, label: Texte du bouton }

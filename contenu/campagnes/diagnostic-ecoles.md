@@ -166,6 +166,7 @@ sections:
     titre: Réservez votre diagnostic offert.
     texte: Visites sur site de 8 h à 15 h, du lundi au samedi, hors vacances scolaires.
     sujet: Diagnostic offert (écoles)
+    formulaire: ecoles
     profil: ecole
     besoins: [Salle TIC, Secrétariat / Administration, Pannes, Lenteurs, Virus / clés USB, Coupures électriques, Perte de données]
     garanties: [Diagnostic sur site et Fiche de Parc offerts, Déplacement compris dans la ville de Yaoundé, Vous restez l'unique décideur]

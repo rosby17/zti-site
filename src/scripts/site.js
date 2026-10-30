@@ -1,5 +1,5 @@
 // Comportements du site ZTi : menu sur téléphone, apparitions, questions repliables, visionneuse des attestations,
-// calculateur du coût réel, formulaire de demande en deux étapes et avis (Notion + e-mail via Apps Script), page « Merci ».
+// calculateur du coût réel, formulaires de demande (général, écoles, entreprises, particuliers), avis, page « Merci ».
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const fmt = n => Math.round(n).toLocaleString('fr-FR').replace(/\s/g, '\u00a0');
@@ -85,7 +85,7 @@ const SOURCE = 'zti-source';
   }
 })();
 
-/* ---------- formulaire de demande ---------- */
+/* ---------- formulaire de demande (général, écoles, entreprises en 3 étapes, particuliers) ---------- */
 $$('form[data-demande]').forEach(form => {
   // choix en boutons
   $$('[data-choix]', form).forEach(g => {
@@ -106,29 +106,29 @@ $$('form[data-demande]').forEach(form => {
   caseAccord.addEventListener('click', () => { caseAccord.setAttribute('aria-checked', String(caseAccord.getAttribute('aria-checked') !== 'true')); caseAccord.closest('.champ').classList.remove('invalide'); });
   const valeur = n => $$(`[data-choix="${n}"] button`, form).filter(b => b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-pressed') === 'true').map(b => b.textContent.trim());
   const code = n => ($$(`[data-choix="${n}"] button[aria-checked="true"]`, form)[0] || {}).dataset?.valeur || '';
-  const champOrg = $('[data-champ="organisation"]', form), champSecteur = $('[data-champ="secteur"]', form);
-  function majProfil() {
-    champOrg.hidden = code('profil') === 'particulier';
-    if (champSecteur) champSecteur.hidden = !['entreprise', 'institution'].includes(code('profil'));
-  }
+  const v = n => (form.elements[n]?.value || '').trim();
+  const profil = () => valeur('profil').join('') || form.dataset.profil || '';
+  const champOrg = $('[data-champ="organisation"]', form);
+  function majProfil() { if (champOrg && $('[data-choix="profil"]', form)) champOrg.hidden = code('profil') === 'particulier'; }
   majProfil();
   $$('input, textarea', form).forEach(i => i.addEventListener('input', () => i.closest('.champ')?.classList.remove('invalide')));
   const tel = form.elements.tel;
   tel.addEventListener('input', () => { const c = tel.value.replace(/\D/g, '').replace(/^237/, '').slice(0, 9); tel.value = c.replace(/(\d)(\d{0,2})(\d{0,2})(\d{0,2})(\d{0,2})/, (m, a, b, c2, d, e) => [a + b, c2, d, e].filter(Boolean).join(' ')); });
 
-  const v = n => (form.elements[n]?.value || '').trim();
-  // contrôle d'une étape : renvoie true si tout est bon, sinon signale les champs
-  const controler = etape => {
+  // contrôle d'un bloc (une étape, ou la fin du formulaire) : signale les champs à corriger
+  const controler = bloc => {
     const erreurs = [];
-    const marque = (n, ok) => { const c = $(`[data-champ="${n}"]`, etape); if (!c) return; c.classList.toggle('invalide', !ok); if (!ok) erreurs.push(c); };
-    marque('profil', !!code('profil'));
-    $$('[data-requis]', etape).forEach(c => marque(c.dataset.champ, !!code(c.dataset.champ)));
-    marque('organisation', code('profil') === 'particulier' || v('organisation').length >= 2);
-    marque('nom', v('nom').length >= 2);
-    marque('tel', /^6\d{8}$/.test(v('tel').replace(/\D/g, '')));
-    marque('email', !v('email') || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v('email')));
-    if ($('[data-case="accord"]', etape)) marque('accord', caseAccord.getAttribute('aria-checked') === 'true');
-    const msg = $('.message-erreur', etape);
+    const marque = (champ, ok) => { if (!champ || champ.hidden) return; champ.classList.toggle('invalide', !ok); if (!ok) erreurs.push(champ); };
+    const champ = n => $(`[data-champ="${n}"]`, bloc);
+    $$('[data-requis]', bloc).forEach(c => marque(c, !!code(c.dataset.champ)));
+    $$('[data-requis-plusieurs]', bloc).forEach(c => marque(c, valeur(c.dataset.champ).length > 0));
+    marque(champ('organisation'), v('organisation').length >= 2);
+    marque(champ('nom'), v('nom').length >= 2);
+    marque(champ('tel'), /^6\d{8}$/.test(v('tel').replace(/\D/g, '')));
+    const ec = champ('email');
+    if (ec) marque(ec, ec.hasAttribute('data-email-requis') ? /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v('email')) : !v('email') || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v('email')));
+    marque(champ('accord'), caseAccord.getAttribute('aria-checked') === 'true');
+    const msg = $(':scope > .message-erreur', bloc) || $(':scope > .message-erreur', fin);
     if (erreurs.length) {
       if (msg) { msg.textContent = 'Quelques informations manquent : elles sont signalées ci-dessus.'; msg.hidden = false; }
       erreurs[0].querySelector('input, textarea, button')?.focus();
@@ -137,54 +137,74 @@ $$('form[data-demande]').forEach(form => {
     if (msg) msg.hidden = true;
     return true;
   };
-  // deux étapes : votre situation, puis vos coordonnées
-  const etapes = $$('[data-etape]', form), progression = $('[data-progression]', form);
+
+  // étapes (formulaire des entreprises) : la fin du formulaire n'apparaît qu'à la dernière
+  const etapes = $$('[data-etape]', form), fin = $('[data-fin]', form), progression = $('[data-progression]', form);
+  const titres = JSON.parse(progression?.dataset.titres || '[]');
+  let courante = 0;
   const aller = n => {
-    etapes.forEach(x => { x.hidden = x.dataset.etape !== String(n); });
-    if (progression) progression.textContent = n === 1 ? 'Étape 1 sur 2 · Votre situation' : 'Étape 2 sur 2 · Vos coordonnées';
+    courante = n;
+    etapes.forEach((x, i) => { x.hidden = i !== n; });
+    fin.hidden = n !== etapes.length - 1;
+    if (progression) progression.textContent = `Étape ${n + 1} sur ${etapes.length} · ${titres[n] || ''}`;
     const haut = form.getBoundingClientRect().top + scrollY - 90;
     if (scrollY > haut) window.scrollTo({ top: haut, behavior: 'smooth' });
-    (n === 2 ? $('[data-etape="2"] input:not([type=hidden])', form) : $('[data-etape="1"] button', form))?.focus({ preventScroll: true });
+    $('input:not([type=hidden]), button:not(.retour)', etapes[n])?.focus({ preventScroll: true });
+    if (n > 0) window.ztiMesurer?.('etape2');
   };
-  $('[data-suivant]', form)?.addEventListener('click', () => { if (controler(etapes[0])) { aller(2); suivi('InitiateCheckout', { content_name: form.dataset.sujet }); } });
-  $('[data-retour]', form)?.addEventListener('click', () => aller(1));
+  $$('[data-suivant]', form).forEach(b => b.addEventListener('click', () => { if (controler(etapes[courante])) aller(courante + 1); }));
+  $$('[data-retour]', form).forEach(b => b.addEventListener('click', () => aller(courante - 1)));
 
+  let envoi = false;
   form.addEventListener('submit', async e => {
     e.preventDefault();
-    if (form.elements.site_web.value) return; // robot
-    if (!etapes.every(x => controler(x) || (aller(+x.dataset.etape), false))) return;
-    const chiffres = v('tel').replace(/\D/g, '');
+    if (envoi || form.elements.site_web.value) return; // déjà en cours, ou robot
+    for (let i = 0; i < etapes.length; i++) if (!controler(etapes[i])) { if (i !== courante) aller(i); else controler(fin) || controler(etapes[i]); return; }
+    if (!controler(fin)) return;
 
+    const chiffres = v('tel').replace(/\D/g, '');
+    const fonction = v('fonction') || valeur('fonction_choix').join('');
     const d = {
-      date: new Date().toLocaleString('fr-FR', { timeZone: 'Africa/Douala' }),
-      sujet: form.dataset.sujet, profil: valeur('profil').join(''), organisation: v('organisation'), nom: v('nom'), fonction: v('fonction'),
-      tel: '+237 ' + chiffres.replace(/(\d)(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5'), email: v('email'), lieu: v('lieu'),
-      besoins: valeur('besoins').join(', '), message: v('message'), moment: valeur('moment').join(''),
-      postes: valeur('postes').join(''), situation: valeur('situation').join(''), accompagnement: valeur('accompagnement').join(''),
-      prestataire: valeur('prestataire').join(''), depenses: valeur('depenses').join(''),
-      secteur: champSecteur && !champSecteur.hidden ? valeur('secteur').join('') : '', connu: valeur('connu').join(''),
+      date: new Date().toLocaleString('fr-FR', { timeZone: 'Africa/Douala' }), accord: true,
+      sujet: form.dataset.sujet, profil: profil(), organisation: v('organisation'), secteur: valeur('secteur').join(''),
+      nom: v('nom'), fonction, tel: '+237 ' + chiffres.replace(/(\d)(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5'), email: v('email'),
+      lieu: v('lieu') || valeur('ville').join(''), postes: valeur('postes').join(''), situation: valeur('situation').join(''),
+      besoins: valeur('besoins'), accompagnement: valeur('accompagnement').join(''), prestataire: valeur('prestataire').join(''),
+      depenses: valeur('depenses').join(''), moment: valeur('moment').join(''), message: v('message'), connu: valeur('connu').join(''),
       page: form.dataset.page || location.pathname, campagne: form.dataset.campagne || '', adresse: location.href.split('#')[0],
       ...JSON.parse(sessionStorage.getItem(SOURCE) || '{}'),
     };
-    const bouton = $('button[type="submit"]', form); bouton.disabled = true;
+    const bouton = $('button[type="submit"]', form); bouton.disabled = true; envoi = true;
     let enregistree = false;
-    if (form.dataset.endpoint) {
-      try { await fetch(form.dataset.endpoint, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(d) }); enregistree = true; } catch (_) { /* réseau coupé : la demande part par WhatsApp */ }
-    }
+    if (form.dataset.endpoint) enregistree = await envoyerDemande(form.dataset.endpoint, d);
     suivi('Lead', { content_name: d.sujet, content_category: d.campagne || d.page });
     const lignes = [
       `Bonjour ZTi, voici ma demande (${d.sujet}) :`,
-      `• Profil : ${d.profil}`, d.organisation && `• ${d.profil === 'Particulier' ? 'Nom' : 'Établissement / entreprise'} : ${d.organisation}`,
+      `• Profil : ${d.profil}`, d.organisation && `• ${d.profil === 'Établissement scolaire' ? 'Établissement' : 'Entreprise / organisation'} : ${d.organisation}`,
       `• Nom : ${d.nom}${d.fonction ? ' (' + d.fonction + ')' : ''}`, `• Téléphone : ${d.tel}`, d.email && `• E-mail : ${d.email}`,
-      d.secteur && `• Secteur : ${d.secteur}`, d.lieu && `• Lieu : ${d.lieu}`, d.postes && `• Ordinateurs : ${d.postes}`,
-      d.situation && `• Situation : ${d.situation}`, d.besoins && `• Besoin : ${d.besoins}`, d.accompagnement && `• Accompagnement : ${d.accompagnement}`,
-      d.prestataire && `• Prestataire actuel : ${d.prestataire}`, d.depenses && `• Dépenses actuelles : ${d.depenses}`,
-      d.moment && `• Meilleur moment : ${d.moment}`, d.message && `• Message : ${d.message}`, d.connu && `• A connu ZTi par : ${d.connu}`,
+      d.secteur && `• ${d.profil === 'Établissement scolaire' ? 'Type' : 'Secteur'} : ${d.secteur}`, d.lieu && `• Lieu : ${d.lieu}`,
+      d.postes && `• ${d.profil === 'Particulier' ? 'Appareil' : 'Ordinateurs'} : ${d.postes}`,
+      d.situation && `• Situation : ${d.situation}`, d.besoins.length && `• ${d.profil === 'Particulier' ? 'Problème' : 'Besoin'} : ${d.besoins.join(', ')}`,
+      d.accompagnement && `• Accompagnement : ${d.accompagnement}`, d.prestataire && `• Prestataire actuel : ${d.prestataire}`,
+      d.depenses && `• Dépenses actuelles : ${d.depenses}`, d.moment && `• Meilleur moment : ${d.moment}`,
+      d.message && `• Message : ${d.message}`, d.connu && `• A connu ZTi par : ${d.connu}`,
     ].filter(Boolean).join('\n');
     sessionStorage.setItem('zti-demande', JSON.stringify({ enregistree, texte: lignes, sujet: d.sujet, wa: form.dataset.wa, mail: form.dataset.mail }));
     location.href = form.dataset.merci;
   });
 });
+
+// envoi au serveur de ZTi (réponse vérifiée) ; ancienne adresse de script Google : envoi « à l'aveugle »
+async function envoyerDemande(adresse, d) {
+  try {
+    if (/script\.google\.com/.test(adresse)) {
+      await fetch(adresse, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(d) });
+      return true;
+    }
+    const r = await fetch(adresse.replace(/\/$/, '') + '/v1/demandes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+    return r.ok;
+  } catch (_) { return false; } // réseau coupé : la demande part par WhatsApp
+}
 
 /* ---------- avis des clients ---------- */
 $$('form[data-avis]').forEach(form => {
@@ -257,4 +277,13 @@ if (merci) {
     mail.addEventListener('click', () => suivi('Contact', { method: 'email' }));
     $('[data-envoi]', merci).hidden = false;
   }
+}
+
+/* ---------- lueur des cartes qui suit la souris ---------- */
+if (matchMedia('(hover: hover)').matches) {
+  document.addEventListener('pointermove', e => {
+    const c = e.target.closest?.('.carte'); if (!c) return;
+    const r = c.getBoundingClientRect();
+    c.style.setProperty('--mx', `${e.clientX - r.left}px`); c.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }, { passive: true });
 }

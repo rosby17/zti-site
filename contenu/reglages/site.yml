@@ -27,6 +27,8 @@ menu:
     lien: /offres/diagnostic-ecoles/
   - texte: Entreprises
     lien: /offres/audit-pme/
+  - texte: Particuliers
+    lien: /offres/particuliers/
   - texte: À propos
     lien: /a-propos/
   - texte: Contact

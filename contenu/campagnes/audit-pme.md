@@ -109,6 +109,7 @@ sections:
     titre: Activez votre audit informatique.
     texte: Gratuit et sans engagement. ZTi vous recontacte au moment choisi.
     sujet: Audit informatique (PME)
+    formulaire: entreprises
     profil: entreprise
     besoins: [Pannes, Lenteurs, Sauvegarde des données, Virus / sécurité, Coupures électriques, Conformité des logiciels, Réseau]
     garanties: [Si vos données peuvent disparaître demain, Si votre entreprise est vulnérable aux rançongiciels, Si vos licences peuvent provoquer une amende, Si votre système peut tomber en panne à tout moment]
