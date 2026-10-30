@@ -53,7 +53,7 @@ const serveur = (r.mesures?.endpoint || '').trim().replace(/\/$/, '');
         </ul>
       </div>
     </div>
-    <p class="geant" aria-hidden="true">ZTi</p>
+    <div class="geant" aria-hidden="true" style={`--logo-zti: url(${lien('/images/logo-zti.svg')})`}></div>
     <div class="bas">
       <span>© {annee} {r.nom_legal}. Tous droits réservés.</span>
       <a href={lien('/confidentialite/')}>Politique de confidentialité</a>

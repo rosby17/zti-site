@@ -79,8 +79,10 @@ body { background: var(--fond-clair); }
 
 /* ——— pied de page : grand « ZTi » en filigrane ——— */
 .pied { position: relative; overflow: hidden; padding-bottom: 20px; }
-.pied .geant { margin: 48px 0 -6px; font: 800 clamp(120px, 26vw, 360px)/.8 var(--titres); letter-spacing: -.07em; text-align: center; user-select: none;
-  color: transparent; background: linear-gradient(180deg, rgba(159,208,255,.28), rgba(159,208,255,0) 85%); -webkit-background-clip: text; background-clip: text; }
+.pied .geant { margin: 48px auto 8px; width: min(100%, 760px); aspect-ratio: 2240 / 1428; user-select: none;
+  /* le vrai logo de ZTi (ovale compris), en filigrane qui s'efface vers le bas */
+  background: linear-gradient(180deg, rgba(159,208,255,.30), rgba(159,208,255,.02) 90%);
+  -webkit-mask: var(--logo-zti) center / contain no-repeat; mask: var(--logo-zti) center / contain no-repeat; }
 .pied .bas { margin-top: 0; position: relative; }
 
 /* ——— apparitions plus douces ——— */
