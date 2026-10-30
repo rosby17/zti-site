@@ -164,3 +164,14 @@ a.reseau:hover, a.reseau:focus-visible { background: rgba(21,101,255,.18); borde
 @media (max-width: 900px) { .etapes-assistance, .grille-telechargements { grid-template-columns: 1fr; } }
 .merci-ambassadeur { margin-top: 36px; padding: 22px; border-radius: 18px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(159,208,255,.25); }
 .merci-ambassadeur .merci-sous-titre { margin-top: 0; }
+
+/* ——— galerie de photos ——— */
+.galerie { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 30px; }
+.galerie figure { margin: 0; display: grid; gap: 8px; }
+.galerie button { padding: 0; border: 0; border-radius: 18px; overflow: hidden; cursor: zoom-in; background: #E6EBF8; aspect-ratio: 16 / 10; box-shadow: 0 14px 30px rgba(1,0,56,.12); }
+.galerie img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s cubic-bezier(.2,.7,.2,1); }
+.galerie button:hover img { transform: scale(1.04); }
+.galerie figcaption { font: 600 14px var(--boutons); color: #02008A; }
+.sombre .galerie figcaption { color: #fff; }
+@media (max-width: 860px) { .galerie { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .galerie { grid-template-columns: 1fr; } }

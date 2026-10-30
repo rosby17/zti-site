@@ -9,7 +9,9 @@ const reseaux = (r.reseaux || []).map(x => ({ ...x, adresse: lienSur(x.adresse) 
 const icone = (nom: string) => iconeReseau(nom) as any;
 const suivre = [
   ...reseaux.map(x => ({ nom: x.nom, adresse: x.adresse, icone: icone(x.nom) })),
-  ...(r.contact.whatsapp && !reseaux.some(x => icone(x.nom) === 'whatsapp') ? [{ nom: 'WhatsApp', adresse: `https://wa.me/${r.contact.whatsapp.replace(/\D/g, '')}`, icone: 'whatsapp' as any }] : []),
+  // WhatsApp : la communauté « Parlons de vos problèmes IT » si elle existe, sinon la discussion avec ZTi
+  ...(!reseaux.some(x => icone(x.nom) === 'whatsapp') && (lienSur(r.communaute?.whatsapp) || r.contact.whatsapp)
+    ? [{ nom: lienSur(r.communaute?.whatsapp) ? 'Communauté WhatsApp' : 'WhatsApp', adresse: lienSur(r.communaute?.whatsapp) || `https://wa.me/${r.contact.whatsapp.replace(/\D/g, '')}`, icone: 'whatsapp' as any }] : []),
 ];
 const annee = new Date().getFullYear();
 const serveur = (r.mesures?.endpoint || '').trim().replace(/\/$/, '');

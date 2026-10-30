@@ -14,11 +14,12 @@ import Appel from './sections/Appel.astro';
 import Demande from './sections/Demande.astro';
 import Avis from './sections/Avis.astro';
 import Diagnostic from './sections/Diagnostic.astro';
+import Galerie from './sections/Galerie.astro';
 
 const { sections = [], page = '', campagne = '' } = Astro.props as { sections: any[]; page?: string; campagne?: string };
 const composants: Record<string, any> = {
   accroche: Accroche, texte_image: TexteImage, cartes: Cartes, services: ListeServices, calculateur: Calculateur,
-  packs: Packs, preuve: Preuve, references: References, questions: Questions, signature: Signature, appel: Appel, demande: Demande, avis: Avis, diagnostic: Diagnostic,
+  packs: Packs, preuve: Preuve, references: References, questions: Questions, signature: Signature, appel: Appel, demande: Demande, avis: Avis, diagnostic: Diagnostic, galerie: Galerie,
 };
 ---
 {sections.map((s, i) => {

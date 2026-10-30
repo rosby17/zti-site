@@ -227,6 +227,22 @@ components:
           - { name: etiquette, type: string, label: Petit titre }
           - { name: titre, type: string, label: Titre }
           - { name: texte, component: texte }
+      - name: galerie
+        label: Galerie de photos
+        fields:
+          - { name: fond, component: fond }
+          - { name: ancre, component: ancre }
+          - { name: etiquette, type: string, label: Petit titre }
+          - { name: titre, type: string, label: Titre }
+          - { name: texte, component: texte }
+          - name: images
+            type: object
+            list: true
+            label: Photos
+            fields:
+              - { name: image, type: image, label: Photo, required: true }
+              - { name: legende, type: string, label: Légende }
+          - { name: mention, type: string, label: Mention sous la galerie }
       - name: diagnostic
         label: Diagnostic en ligne (particuliers)
         fields:

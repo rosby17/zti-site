@@ -92,6 +92,27 @@ sections:
     etiquette: Notre vision
     titre: Le premier laboratoire africain de récupération de données.
     texte: "Aujourd'hui, une entreprise africaine qui perd ses données n'a que deux choix : un technicien local aux moyens limités, ou l'envoi de ses disques en Europe. Cette dépendance n'est pas une fatalité.\n\nAprès des années de portes fermées, Recoveo France a accepté d'échanger avec Marcelin, de le considérer et de collaborer. Ensemble, ZTi veut installer au Cameroun le premier laboratoire africain spécialisé en récupération de données. Pour que vos données soient sauvées ici, et rapidement."
+    image: /images/laboratoire/facade.jpg
+    image_position: droite
+  - type: galerie
+    fond: ivoire
+    etiquette: Le laboratoire en projet
+    titre: Un vrai laboratoire, aux normes de la récupération de données.
+    texte: "Postes de diagnostic, établis de récupération et salle blanche ISO 7 : l'environnement sans poussière qu'il faut pour ouvrir un disque dur sans l'abîmer."
+    images:
+      - image: /images/laboratoire/espace-travail.jpg
+        legende: L'espace de travail
+      - image: /images/laboratoire/salle-blanche.jpg
+        legende: La salle blanche ISO 7
+      - image: /images/laboratoire/etabli-recuperation.jpg
+        legende: L'établi de récupération
+      - image: /images/laboratoire/etabli-disques.jpg
+        legende: Le poste des disques et des clés
+      - image: /images/laboratoire/bureau-vitre.jpg
+        legende: Le bureau
+      - image: /images/laboratoire/accueil.jpg
+        legende: L'accueil des clients
+    mention: Images du projet de laboratoire de ZTi.
   - type: preuve
     fond: ivoire
     etiquette: La preuve
