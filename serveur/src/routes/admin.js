@@ -429,6 +429,7 @@ admin.get('/reglages', async c => {
   return c.json({
     ...Object.fromEntries(lignes.map(l => [l.cle, l.valeur])),
     emails_actifs: !!(config.brevo && config.expediteurEmail),
+    site: config.sitePublic,
     expediteur: config.expediteurEmail ? `${config.expediteurNom} <${config.expediteurEmail}>` : '',
   });
 });
