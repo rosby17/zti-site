@@ -1,0 +1,27 @@
+/* Espace ambassadeurs : même charte que le tableau de bord, mise en page grand public. */
+.espace-haut { background: radial-gradient(60% 80% at 85% 0%, rgba(21,101,255,.4), transparent 70%), var(--nuit); color: #D7DCF3; padding: 18px clamp(16px, 4vw, 48px) 0; }
+.espace-barre { display: flex; align-items: center; justify-content: space-between; gap: 14px; max-width: 1100px; margin: 0 auto; }
+.espace-barre img { height: 36px; }
+.espace-barre a { color: #D7DCF3; text-decoration: none; font-weight: 600; font-size: 14px; }
+.espace-barre .actions button { background: none; border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 999px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+.espace-titre { max-width: 1100px; margin: 0 auto; padding: 44px 0 64px; }
+.espace-titre h1 { color: #fff; font-size: clamp(28px, 4.4vw, 46px); max-width: 760px; line-height: 1.08; }
+.espace-titre h1 em { font-style: normal; color: #9FD0FF; }
+.espace-titre p { max-width: 640px; font-size: 17px; margin: 14px 0 0; }
+.espace-corps { max-width: 1100px; margin: -36px auto 60px; padding: 0 clamp(16px, 4vw, 48px); display: grid; gap: 16px; }
+.etapes-amb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.etapes-amb .carte b { display: block; font: 800 30px var(--titres); color: var(--vif); }
+.solde b { font: 800 clamp(40px, 6vw, 60px)/1 var(--titres); color: var(--encre); }
+.solde { background: linear-gradient(135deg, #fff, #EEF3FF); }
+.lien-parrain { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.lien-parrain code { flex: 1 1 260px; font: 600 14px ui-monospace, monospace; background: #F0F3FA; border: 1px dashed var(--vif); border-radius: 12px; padding: 12px 14px; color: var(--logo); overflow-wrap: anywhere; }
+.recompense { display: grid; gap: 10px; align-content: start; }
+.recompense b { font: 800 22px var(--titres); color: var(--vif); }
+.case-maison { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-size: 14px; color: var(--texte); }
+.case-maison .boite { width: 24px; height: 24px; border-radius: 7px; border: 2px solid #C7CFE6; background: #fff; display: grid; place-items: center; }
+.case-maison .boite::after { content: ''; width: 6px; height: 11px; border-right: 3px solid #fff; border-bottom: 3px solid #fff; transform: rotate(45deg) translate(-1px, -1px); opacity: 0; }
+.case-maison[aria-checked="true"] .boite { background: var(--degrade); border-color: transparent; }
+.case-maison[aria-checked="true"] .boite::after { opacity: 1; }
+.telephone-maison { display: flex; } .telephone-maison span { display: grid; place-items: center; padding: 0 12px; background: #EEF2FF; border: 1px solid var(--trait); border-right: 0; border-radius: 12px 0 0 12px; font-weight: 600; color: var(--logo); }
+.telephone-maison input { border-radius: 0 12px 12px 0; }
+@media (max-width: 800px) { .etapes-amb { grid-template-columns: 1fr; } }
