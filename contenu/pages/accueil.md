@@ -15,13 +15,13 @@ sections:
       texte: Découvrir nos services
       lien: /services/
     sous_bouton: Offert · Sans engagement
-    image: /images/service-outils.webp
+    image: /images/dirigeant.jpg
     cadrage: droite
     bas: Votre outil informatique doit travailler pour vous, pas l'inverse.
   - type: cartes
     fond: ivoire
     etiquette: Pour qui
-    titre: Une offre pour chacun.
+    titre: Une solution pour chacun.
     cartes:
       - titre: Écoles, collèges, lycées
         image: /images/public-ecoles.webp
