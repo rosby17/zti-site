@@ -1,11 +1,16 @@
 // Applique dans l'ordre les fichiers de serveur/migrations/ qui ne l'ont pas encore été (une transaction chacun).
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { sql } from './db.js';
+import postgres from 'postgres';
+import { sql as sqlApp } from './db.js';
+import { config } from './config.js';
 
 const dossier = fileURLToPath(new URL('../migrations/', import.meta.url));
 
 export async function migrer() {
+  // rôle propriétaire du schéma pour les migrations s'il est fourni, sinon la connexion de l'application
+  const sql = config.baseMigration ? postgres(config.baseMigration, { max: 1, onnotice: () => {} }) : sqlApp;
+  try {
   await sql`create table if not exists migrations (nom text primary key, appliquee_le timestamptz not null default now())`;
   const faites = new Set((await sql`select nom from migrations`).map(r => r.nom));
   const fichiers = (await readdir(dossier)).filter(f => f.endsWith('.sql')).sort();
@@ -18,8 +23,9 @@ export async function migrer() {
     });
     console.log('Migration appliquée :', f);
   }
+  } finally { if (sql !== sqlApp) await sql.end(); }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  migrer().then(() => sql.end()).catch(e => { console.error(e); process.exit(1); });
+  migrer().then(() => sqlApp.end()).catch(e => { console.error(e); process.exit(1); });
 }

@@ -9,7 +9,7 @@ import { config } from '../config.js';
 import { envoyer, reglage } from '../notifier.js';
 import { enregistrerEvenement } from './public.js';
 import {
-  hacher, verifier, regleMotDePasse, nouveauJeton, empreinteJeton, adresseIp, limiter, texte, estEmail, telephone,
+  hacher, verifier, regleMotDePasse, nouveauJeton, empreinteJeton, adresseIp, limiter, texte, estEmail, telephone, motSur,
 } from '../securite.js';
 
 export const membres = new Hono();
@@ -88,7 +88,9 @@ membres.post('/connexion', async c => {
   if (!origineOk(c)) return c.json({ erreur: 'Origine refusée.' }, 403);
   const d = await corps(c);
   const email = texte(d?.email, 160).toLowerCase();
-  if (!limiter('mcnx-ip:' + adresseIp(c), 15, 15 * 60_000) || !limiter('mcnx:' + email, 5, 15 * 60_000))
+  // par adresse, par couple (e-mail, adresse) et, plus large, par e-mail : bloquer quelqu'un d'autre devient difficile
+  const ip = adresseIp(c);
+  if (!limiter('mcnx-ip:' + ip, 15, 15 * 60_000) || !limiter('mcnx:' + email + '|' + ip, 5, 15 * 60_000) || !limiter('mcnx-mail:' + email, 30, 3600_000))
     return c.json({ erreur: 'Trop d\'essais. Réessayez dans 15 minutes.' }, 429);
   const [m] = await sql`select id, mot_de_passe, actif from membres where lower(email) = ${email}`;
   if (!(await verifier(String(d?.mot_de_passe || '').slice(0, 200), m?.actif ? m.mot_de_passe : null)))
@@ -100,15 +102,17 @@ membres.post('/connexion', async c => {
 // mot de passe oublié : lien par e-mail (valable 1 heure, usage unique) ; même réponse que le compte existe ou non
 membres.post('/oubli', async c => {
   if (!origineOk(c)) return c.json({ erreur: 'Origine refusée.' }, 403);
-  if (!limiter('oubli:' + adresseIp(c), 5, 60 * 60_000)) return c.json({ erreur: 'Trop de demandes.' }, 429);
   const d = await corps(c);
   const email = texte(d?.email, 160).toLowerCase();
+  if (!limiter('oubli:' + adresseIp(c), 5, 60 * 60_000) || !limiter('oubli-mail:' + email, 3, 60 * 60_000)) return c.json({ erreur: 'Trop de demandes.' }, 429);
   const [m] = await sql`select id, nom from membres where lower(email) = ${email} and actif`;
   if (m) {
     const jeton = nouveauJeton();
+    await sql`delete from jetons_membres where membre_id = ${m.id}`; // un seul lien valable à la fois
     await sql`insert into jetons_membres (empreinte, membre_id, expire_le) values (${empreinteJeton(jeton)}, ${m.id}, now() + interval '1 hour')`;
-    await envoyer({ a: email, sujet: 'Choisir un nouveau mot de passe — ZTi',
-      texte: `Bonjour ${m.nom},\n\nPour choisir un nouveau mot de passe, ouvrez ce lien (valable une heure) :\n${config.adresse}/espace/#/nouveau/${jeton}\n\nSi vous n'avez rien demandé, ignorez cet e-mail.\n\nL'équipe ZTi` });
+    // envoi sans attendre : même temps de réponse que le compte existe ou non
+    envoyer({ a: email, sujet: 'Choisir un nouveau mot de passe — ZTi',
+      texte: `Bonjour ${motSur(m.nom, 60)},\n\nPour choisir un nouveau mot de passe, ouvrez ce lien (valable une heure) :\n${config.adresse}/espace/#/nouveau/${jeton}\n\nSi vous n'avez rien demandé, ignorez cet e-mail.\n\nL'équipe ZTi` }).catch(() => {});
   }
   return c.json({ ok: true, message: 'Si un compte existe avec cet e-mail, un lien vient de lui être envoyé.' });
 });
@@ -124,6 +128,7 @@ membres.post('/nouveau-mot-de-passe', async c => {
     if (!j) return null;
     await t`update membres set mot_de_passe = ${await hacher(d.mot_de_passe)} where id = ${j.membre_id}`;
     await t`delete from sessions_membres where membre_id = ${j.membre_id}`;
+    await t`delete from jetons_membres where membre_id = ${j.membre_id}`;
     return j.membre_id;
   });
   if (!id) return c.json({ erreur: 'Ce lien n\'est plus valable. Demandez-en un nouveau.' }, 400);
@@ -133,7 +138,7 @@ membres.post('/nouveau-mot-de-passe', async c => {
 
 // ——— session obligatoire pour la suite ———
 membres.use('*', async (c, next) => {
-  if (['/inscription', '/connexion', '/oubli', '/nouveau-mot-de-passe'].some(p => c.req.path.endsWith(p))) return next();
+  if (['/inscription', '/connexion', '/oubli', '/nouveau-mot-de-passe'].map(p => '/v1/membres' + p).includes(c.req.path)) return next();
   if (!origineOk(c)) return c.json({ erreur: 'Origine refusée.' }, 403);
   const jeton = getCookie(c, COOKIE);
   const [m] = jeton ? await sql`
@@ -204,5 +209,6 @@ membres.post('/mot-de-passe', async c => {
   if (!regleMotDePasse(d?.nouveau)) return c.json({ erreur: 'Le nouveau mot de passe doit faire au moins 10 caractères.' }, 400);
   await sql`update membres set mot_de_passe = ${await hacher(d.nouveau)} where id = ${m.id}`;
   await sql`delete from sessions_membres where membre_id = ${m.id} and empreinte <> ${empreinteJeton(c.get('jeton'))}`;
+  await sql`delete from jetons_membres where membre_id = ${m.id}`;
   return c.json({ ok: true });
 });

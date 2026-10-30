@@ -1,6 +1,8 @@
 // Lecture des contenus (contenu/) et petites aides communes aux pages.
 import { getCollection, getEntry } from 'astro:content';
 import { marked } from 'marked';
+// le HTML brut écrit dans le back-office n'est pas recopié dans la page (seul le Markdown est rendu)
+marked.use({ renderer: { html: () => '' } });
 
 export type Reglages = {
   nom: string;
@@ -65,6 +67,9 @@ export const PUBLICS: Record<string, string> = {
   institutions: 'Institutions',
   particuliers: 'Particuliers',
 };
+
+// lien venu du back-office (réseaux, communauté) : seulement https:, mailto: ou tel: (jamais javascript:)
+export const lienSur = (v?: string) => /^(https:\/\/|mailto:|tel:)/i.test(String(v || '').trim()) ? String(v).trim() : '';
 
 // icône d'un réseau social d'après son nom (Google Maps, Facebook, X…)
 export function iconeReseau(nom: string): string {

@@ -3,6 +3,7 @@
 // Les données des visiteurs sont toujours échappées avant d'entrer dans le HTML.
 import { config } from './config.js';
 import { sql } from './db.js';
+import { motSur, sansLien, limiter } from './securite.js';
 
 export const echapper = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -48,19 +49,25 @@ export async function reglage(cle) {
 export async function alerter(genre, sujet, lignes) {
   const r = await reglage('alertes');
   if (!r || r[genre] === false) return;
+  if (!limiter('alerte-global', 200, 3600_000)) return;
   const res = await envoyer({ a: r.destinataires || [], sujet, texte: lignes.filter(x => typeof x === 'string').join('\n') });
   if (!res.ok && config.brevo) console.error('Alerte non envoyée :', res.raison);
 }
 
 // remplace {prenom}, {nom}, {organisation} dans un modèle
 export function remplir(modele, d) {
-  const prenom = String(d.nom || '').trim().split(/\s+/).at(-1) || '';
-  return String(modele || '').replace(/\{(prenom|nom|organisation)\}/g, (_, k) => ({ prenom, nom: d.nom || '', organisation: d.organisation || '' }[k]));
+  // seules des lettres passent : un visiteur ne peut pas glisser un lien ou une phrase dans un e-mail signé ZTi
+  const nom = motSur(d.nom, 60), prenom = motSur(String(d.nom || '').trim().split(/\s+/).at(-1), 30) || nom.split(' ')[0] || '';
+  return String(modele || '').replace(/\{(prenom|nom|organisation)\}/g, (_, k) => ({ prenom, nom, organisation: motSur(d.organisation, 60) }[k]));
 }
 
 // accusé de réception automatique au client (s'il a donné son e-mail)
 export async function accuserReception(d) {
   if (!d.email) return;
+  // un nom ou une organisation qui contient un lien : pas d'accusé (tentative d'utiliser ZTi pour envoyer un message piégé)
+  if (sansLien(d.nom) || sansLien(d.organisation)) return;
+  // un seul accusé par adresse et par 24 h, et 60 au plus par heure pour tout le site
+  if (!limiter('accuse:' + d.email.toLowerCase(), 1, 24 * 3600_000) || !limiter('accuse-global', 60, 3600_000)) return;
   const m = await reglage('accuse_demande');
   if (!m?.actif) return;
   const alertes = await reglage('alertes');

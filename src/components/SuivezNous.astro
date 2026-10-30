@@ -2,11 +2,11 @@
 // « Suivez-nous » : tous les réseaux de ZTi, juste avant le pied de page de chaque page. Un réseau sans adresse
 // (Réglages du site › Réseaux sociaux) affiche « Bientôt disponible » ; la communauté WhatsApp vient de Réglages › Communauté.
 import Icone from './Icone.astro';
-import { reglages, iconeReseau } from '../lib/contenu';
+import { reglages, iconeReseau, lienSur } from '../lib/contenu';
 const r = await reglages();
 const cases = [
-  ...(r.reseaux || []).filter(x => x.nom).map(x => ({ nom: x.nom, adresse: (x.adresse || '').trim(), icone: iconeReseau(x.nom) })),
-  { nom: 'Communauté WhatsApp', adresse: (r.communaute?.whatsapp || '').trim(), icone: 'whatsapp' },
+  ...(r.reseaux || []).filter(x => x.nom).map(x => ({ nom: x.nom, adresse: lienSur(x.adresse), icone: iconeReseau(x.nom) })),
+  { nom: 'Communauté WhatsApp', adresse: lienSur(r.communaute?.whatsapp), icone: 'whatsapp' },
 ];
 ---
 <section class="section fond-nuit sombre suivez-nous" aria-labelledby="suivez-nous-titre">

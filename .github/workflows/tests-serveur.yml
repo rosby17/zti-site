@@ -1,0 +1,31 @@
+# Tests du serveur ZTi (sécurité comprise) à chaque modification de serveur/, sur une base PostgreSQL jetable.
+name: Tests du serveur
+on:
+  push:
+    paths: ['serveur/**', '.github/workflows/tests-serveur.yml']
+  pull_request:
+    paths: ['serveur/**']
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_PASSWORD: tests, POSTGRES_DB: zti }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run: { working-directory: serveur }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: serveur/package-lock.json }
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+        env:
+          DATABASE_URL: postgres://postgres:tests@localhost:5432/zti
+          DOSSIER_FICHIERS: /tmp/zti-fichiers

@@ -53,7 +53,7 @@ admin.post('/connexion', async c => {
   const d = await corps(c);
   const email = texte(d?.email, 160).toLowerCase(), mdp = String(d?.mot_de_passe || '').slice(0, 200);
   const ip = adresseIp(c);
-  if (!limiter('cnx-ip:' + ip, 10, 15 * 60_000) || !limiter('cnx-mail:' + email, 5, 15 * 60_000))
+  if (!limiter('cnx-ip:' + ip, 10, 15 * 60_000) || !limiter('cnx:' + email + '|' + ip, 5, 15 * 60_000) || !limiter('cnx-mail:' + email, 20, 3600_000))
     return c.json({ erreur: 'Trop d\'essais. Réessayez dans 15 minutes.' }, 429);
   const [m] = await sql`select id, nom, email, role, mot_de_passe, actif, doit_changer from equipe where lower(email) = ${email}`;
   const ok = await verifier(mdp, m?.actif ? m.mot_de_passe : null);
@@ -68,7 +68,7 @@ admin.post('/connexion', async c => {
 
 // ——— session obligatoire pour tout le reste ———
 admin.use('*', async (c, next) => {
-  if (c.req.path.endsWith('/connexion')) return next();
+  if (c.req.path === '/v1/admin/connexion') return next();
   if (!origineOk(c)) return c.json({ erreur: 'Origine refusée.' }, 403);
   const jeton = getCookie(c, COOKIE);
   if (!jeton) return c.json({ erreur: 'Connexion nécessaire.' }, 401);
@@ -85,7 +85,7 @@ admin.use('*', async (c, next) => {
   c.set('membre', m);
   c.set('jeton', jeton);
   // mot de passe provisoire : seules ces routes restent ouvertes tant qu'il n'est pas changé
-  const libre = ['/moi', '/mot-de-passe', '/deconnexion'].some(p => c.req.path.endsWith(p));
+  const libre = ['/moi', '/mot-de-passe', '/deconnexion'].map(p => '/v1/admin' + p).includes(c.req.path);
   if (m.doit_changer && !libre) return c.json({ erreur: 'Changez d\'abord votre mot de passe provisoire.' }, 403);
   return next();
 });
@@ -173,6 +173,7 @@ async function statsCampagnes(jours) {
     select coalesce(k.code, v.code, d.code) as code, k.id, k.nom, k.budget, coalesce(k.source, v.source) as source,
       coalesce(v.visites, 0) as visites, coalesce(d.demandes, 0) as demandes, coalesce(d.clients, 0) as clients, coalesce(d.chiffre, 0) as chiffre
     from campagnes k full join v on v.code = k.code full join d on d.code = coalesce(k.code, v.code)
+    where k.code is not null or d.code is not null
     order by coalesce(d.demandes, 0) desc, coalesce(v.visites, 0) desc`;
 }
 
@@ -231,31 +232,37 @@ admin.patch('/demandes/:id', async c => {
   }
   if (!Object.keys(maj).length) return c.json({ erreur: 'Rien à modifier.' }, 400);
   const resultat = await sql.begin(async t => {
-    const [avant] = await t`select etat from demandes where id = ${id} for update`;
+    const [avant] = await t`select etat, parrain_id from demandes where id = ${id} for update`;
     if (!avant) return null;
+    // une fiche recommandée ne passe « client » que par un administrateur (elle rapporte des points)
+    if (maj.etat === 'client' && avant.parrain_id && c.get('membre').role !== 'admin') return 'interdit';
     const [apres] = await t`update demandes set ${t(maj)}, mis_a_jour_le = now() where id = ${id} returning id, etat`;
     if (maj.etat && maj.etat !== avant.etat) {
       await t`insert into notes (demande_id, auteur_id, genre, texte) values (${id}, ${m.id}, 'etat', ${avant.etat + ' → ' + maj.etat})`;
-      await crediterParrain(t, id, maj.etat);
+      await crediterParrain(t, id, maj.etat, m.id);
     }
     return apres;
   });
   if (!resultat) return c.json({ erreur: 'Fiche introuvable.' }, 404);
+  if (resultat === 'interdit') return c.json({ erreur: 'Fiche recommandée par un ambassadeur : seul un administrateur la passe en « Client ».' }, 403);
   return c.json({ ok: true });
 });
 
 // points de l'ambassadeur : une fois quand ZTi confirme la demande du filleul, une fois quand il devient client
 // (index unique : jamais deux fois les mêmes points pour une demande, même si l'état fait des allers-retours)
-async function crediterParrain(t, demandeId, etat) {
-  const [d] = await t`select parrain_id, nom from demandes where id = ${demandeId}`;
+async function crediterParrain(t, demandeId, etat, auteurId) {
+  const [d] = await t`select parrain_id, nom, tel from demandes where id = ${demandeId}`;
   if (!d?.parrain_id) return;
   const fid = (await t`select valeur from reglages where cle = 'fidelite'`)[0]?.valeur || {};
   if (fid.actif === false) return;
   const prenom = String(d.nom).split(' ')[0];
-  if (['rappelee', 'rendez_vous', 'devis', 'client'].includes(etat) && fid.points_recommandation > 0)
-    await t`insert into points (membre_id, points, motif, detail, demande_id) values (${d.parrain_id}, ${fid.points_recommandation}, 'recommandation', ${'Demande de ' + prenom + ' confirmée'}, ${demandeId}) on conflict do nothing`;
-  if (etat === 'client' && fid.points_client > 0)
-    await t`insert into points (membre_id, points, motif, detail, demande_id) values (${d.parrain_id}, ${fid.points_client}, 'client', ${prenom + ' est devenu client'}, ${demandeId}) on conflict do nothing`;
+  // une seule fois par personne recommandée (même téléphone), même si elle envoie plusieurs demandes
+  const dejaPour = async motif => (await t`select 1 from points p join demandes x on x.id = p.demande_id
+    where p.membre_id = ${d.parrain_id} and p.motif = ${motif} and x.tel = ${d.tel} limit 1`).length > 0;
+  if (['rendez_vous', 'devis', 'client'].includes(etat) && fid.points_recommandation > 0 && !(await dejaPour('recommandation')))
+    await t`insert into points (membre_id, points, motif, detail, demande_id, auteur_id) values (${d.parrain_id}, ${fid.points_recommandation}, 'recommandation', ${'Demande de ' + prenom + ' confirmée'}, ${demandeId}, ${auteurId}) on conflict do nothing`;
+  if (etat === 'client' && fid.points_client > 0 && !(await dejaPour('client')))
+    await t`insert into points (membre_id, points, motif, detail, demande_id, auteur_id) values (${d.parrain_id}, ${fid.points_client}, 'client', ${prenom + ' est devenu client'}, ${demandeId}, ${auteurId}) on conflict do nothing`;
 }
 
 admin.post('/demandes/:id/notes', async c => {
@@ -309,7 +316,7 @@ admin.get('/export/demandes.csv', async c => {
       montant, page, utm_source, utm_medium, utm_campaign, utm_content, referent
     from demandes order by cree_le desc`;
   const colonnes = lignes.columns?.map(x => x.name) || Object.keys(lignes[0] || { date: '' });
-  const cellule = v => { let s = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+  const cellule = v => { let s = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(s) && !/^\+237 [\d ]+$/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
   const csv = '﻿' + [colonnes.join(';'), ...lignes.map(l => colonnes.map(k => cellule(l[k])).join(';'))].join('\r\n');
   c.header('Content-Type', 'text/csv; charset=utf-8');
   c.header('Content-Disposition', `attachment; filename="zti-demandes-${new Date().toISOString().slice(0, 10)}.csv"`);
@@ -360,7 +367,7 @@ function lireCampagne(d) {
   if (f.nom.length < 2) return [null, 'Nom de la campagne obligatoire.'];
   if (!/^[a-z0-9][a-z0-9-]{1,60}$/.test(f.code)) return [null, 'Code : lettres minuscules, chiffres et tirets (ex. ecoles-novembre).'];
   if (!/^[a-z0-9_-]{1,40}$/.test(f.source) || !/^[a-z0-9_-]{1,40}$/.test(f.support)) return [null, 'Source ou support invalide.'];
-  if (!f.page.startsWith('/')) return [null, 'La page doit commencer par « / ».'];
+  if (!/^\/(?!\/)/.test(f.page)) return [null, 'La page doit commencer par « / ».'];
   if (f.budget !== null && (!Number.isInteger(f.budget) || f.budget < 0)) return [null, 'Budget invalide.'];
   for (const k of ['debut', 'fin']) if (f[k] && !/^\d{4}-\d{2}-\d{2}$/.test(f[k])) return [null, 'Date invalide.'];
   return [f, null];
@@ -374,6 +381,7 @@ admin.post('/campagnes', async c => {
 });
 
 admin.patch('/campagnes/:id', async c => {
+  if (!estAdmin(c)) return refuse(c);
   const id = c.req.param('id');
   if (!estUuid(id)) return c.json({ erreur: 'Campagne introuvable.' }, 404);
   const [f, err] = lireCampagne((await corps(c)) || {});
@@ -651,6 +659,7 @@ admin.get('/echanges', async c => {
 
 // accorder ou refuser un échange ; un refus rend les points (ligne inverse dans le registre)
 admin.patch('/echanges/:id', async c => {
+  if (!estAdmin(c)) return refuse(c);
   const id = c.req.param('id');
   if (!estUuid(id)) return c.json({ erreur: 'Échange introuvable.' }, 404);
   const d = await corps(c);

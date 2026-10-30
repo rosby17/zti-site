@@ -7,8 +7,18 @@ import { config } from './config.js';
 const scryptP = promisify(scrypt);
 const N = 32768, R = 8, P = 1, LONGUEUR = 64, MEMOIRE = 64 * 1024 * 1024;
 
+// au plus 4 calculs scrypt en même temps (32 Mo chacun) : au-delà, « serveur occupé » plutôt que tout bloquer
+let enCours = 0;
+export class Occupe extends Error {}
+async function borne(fn) {
+  if (enCours >= 4) throw new Occupe('Serveur occupé, réessayez dans un instant.');
+  enCours++;
+  try { return await fn(); } finally { enCours--; }
+}
+
 // ——— mots de passe (scrypt, sel aléatoire, comparaison à temps constant) ———
-export async function hacher(motDePasse) {
+export async function hacher(motDePasse) { return borne(() => hacherBrut(motDePasse)); }
+async function hacherBrut(motDePasse) {
   const sel = randomBytes(16);
   const empreinte = await scryptP(motDePasse.normalize('NFKC'), sel, LONGUEUR, { N, r: R, p: P, maxmem: MEMOIRE });
   return `scrypt$${N}$${R}$${P}$${sel.toString('base64url')}$${empreinte.toString('base64url')}`;
@@ -17,7 +27,10 @@ export async function hacher(motDePasse) {
 // empreinte factice : même durée de calcul quand l'e-mail n'existe pas (on ne révèle pas quels comptes existent)
 let factice;
 export async function verifier(motDePasse, stocke) {
-  factice ??= await hacher('mot-de-passe-factice-' + randomBytes(8).toString('hex'));
+  factice ??= await hacherBrut('mot-de-passe-factice-' + randomBytes(8).toString('hex'));
+  return borne(() => verifierBrut(motDePasse, stocke));
+}
+async function verifierBrut(motDePasse, stocke) {
   const [algo, n, r, p, sel, attendu] = String(stocke || factice).split('$');
   if (algo !== 'scrypt') return false;
   const calcule = await scryptP(String(motDePasse).normalize('NFKC'), Buffer.from(sel, 'base64url'), LONGUEUR,
@@ -42,8 +55,10 @@ export const nouveauJeton = () => randomBytes(32).toString('base64url');
 export const empreinteJeton = j => createHash('sha256').update(String(j)).digest('hex');
 
 // ——— adresse du visiteur (pour les limites seulement, jamais enregistrée) ———
+// derrière Cloudflare (DERRIERE_CLOUDFLARE=1, et serveur fermé aux autres adresses) : en-tête de Cloudflare ;
+// sinon : dernière adresse ajoutée par le proxy du serveur (Traefik), que le visiteur ne peut pas choisir
 export function adresseIp(c) {
-  const cf = c.req.header('cf-connecting-ip');
+  const cf = config.derriereCloudflare ? c.req.header('cf-connecting-ip') : '';
   if (cf) return cf.trim();
   const xff = (c.req.header('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean);
   return xff.at(-1) || c.env?.incoming?.socket?.remoteAddress || 'inconnue';
@@ -54,15 +69,17 @@ export function adresseIp(c) {
 export function empreinteVisiteur(c, jour = new Date().toISOString().slice(0, 10)) {
   const secret = config.secretVisites || 'secret-de-developpement-local-uniquement-0000';
   return createHmac('sha256', secret)
-    .update(`${jour}|${adresseIp(c)}|${c.req.header('user-agent') || ''}`)
+    .update(`${jour}|${adresseIp(c)}|${(c.req.header('user-agent') || '').slice(0, 300)}`)
     .digest('base64url').slice(0, 22);
 }
 
 // ——— limites anti-abus (en mémoire, par adresse et par action) ———
 const compteurs = new Map();
+const MAX_CLES = 100_000;
 export function limiter(cle, max, fenetreMs) {
   const maintenant = Date.now();
   const e = compteurs.get(cle);
+  if (!e && compteurs.size >= MAX_CLES) return false; // table pleine (attaque) : on refuse plutôt que de saturer la mémoire
   if (!e || e.fin < maintenant) { compteurs.set(cle, { n: 1, fin: maintenant + fenetreMs }); return true; }
   e.n += 1;
   return e.n <= max;
@@ -76,6 +93,9 @@ export function texte(v, max = 200) {
   if (v === undefined || v === null) return '';
   return String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/[ \t]+/g, ' ').trim().slice(0, max);
 }
+// texte d'un visiteur inséré dans un e-mail envoyé par ZTi : lettres, espaces, apostrophes et tirets seulement
+export const motSur = (v, max = 30) => String(v || '').normalize('NFC').replace(/[^\p{L}' -]/gu, '').trim().slice(0, max);
+export const sansLien = v => /https?:|www\.|\.[a-z]{2,}\/|[\r\n]/i.test(String(v || ''));
 export const estUuid = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export const estEmail = v => typeof v === 'string' && v.length <= 160 && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
 // téléphone camerounais : 9 chiffres commençant par 6 ou 2, avec ou sans +237
@@ -88,6 +108,7 @@ export function domaine(v) {
   try { const u = new URL(String(v)); return /^https?:$/.test(u.protocol) ? u.hostname.replace(/^www\./, '').slice(0, 120) : ''; } catch { return ''; }
 }
 export function appareil(ua = '') {
+  ua = String(ua).slice(0, 300);
   if (/iPad|Tablet|PlayBook|Silk|Kindle|(Android(?!.*Mobile))/i.test(ua)) return 'tablette';
   if (/Mobi|iPhone|iPod|Android|Opera Mini|IEMobile/i.test(ua)) return 'mobile';
   return ua ? 'ordinateur' : '';

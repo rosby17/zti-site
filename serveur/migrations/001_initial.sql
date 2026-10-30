@@ -2,8 +2,6 @@
 -- campagnes publicitaires, équipe ZTi et sessions du back-office.
 -- Aucun accès direct depuis Internet : seule l'API (serveur/) lit et écrit, avec un rôle dédié.
 
-create extension if not exists pgcrypto;
-
 -- ——— équipe ZTi (comptes du back-office) ———
 create table equipe (
   id uuid primary key default gen_random_uuid(),

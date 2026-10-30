@@ -44,6 +44,7 @@ async function corps(c) {
 const trop = c => c.json({ erreur: 'Trop de demandes. Réessayez dans quelques minutes.' }, 429);
 
 publique.get('/sante', async c => {
+  if (!limiter('sante:' + adresseIp(c), 30, 60_000)) return trop(c);
   await sql`select 1`;
   return c.json({ ok: true });
 });
@@ -51,7 +52,7 @@ publique.get('/sante', async c => {
 // ——— demande de diagnostic / contact ———
 publique.post('/demandes', async c => {
   const ip = adresseIp(c);
-  if (!limiter('demande:' + ip, 5, 10 * 60_000)) return trop(c);
+  if (!limiter('demande:' + ip, 5, 10 * 60_000) || !limiter('demande-global', 120, 3600_000)) return trop(c);
   const d = await corps(c);
   if (!d) return c.json({ erreur: 'Demande illisible.' }, 400);
   if (texte(d.site_web)) return c.json({ ok: true }); // piège à robots : on fait semblant
@@ -85,14 +86,15 @@ publique.post('/demandes', async c => {
   await enregistrerEvenement(c, 'demande', { chemin: f.page || '/', ...f, parrain: code });
 
   accuserReception(f).catch(e => console.error('Accusé de réception :', e.message));
-  alerter('demandes', `Nouvelle demande — ${f.sujet || 'Site'} — ${f.organisation || f.nom}`, [
-    `${f.nom}${f.fonction ? ' (' + f.fonction + ')' : ''} — ${f.tel}${f.email ? ' — ' + f.email : ''}`,
-    f.organisation && `${f.profil} : ${f.organisation}${f.secteur ? ' (' + f.secteur + ')' : ''}`,
-    f.postes && `Ordinateurs : ${f.postes}`, f.situation && `Situation : ${f.situation}`,
-    f.accompagnement && `Accompagnement : ${f.accompagnement}`, besoins.length && `Besoins : ${besoins.join(', ')}`,
-    f.message && `Message : ${f.message}`, f.moment && `À rappeler : ${f.moment}`,
-    f.utm_campaign && `Campagne : ${f.utm_campaign} (${f.utm_source})`,
-    '', `Fiche : ${config.adresse}/admin/#/demandes/${ligne.id}`,
+  const l = v => String(v || '').replace(/\s+/g, ' ').trim(); // une ligne par champ : pas de faux lien glissé dans l'alerte
+  alerter('demandes', `Nouvelle demande — ${l(f.sujet) || 'Site'} — ${l(f.organisation || f.nom)}`, [
+    '>>> Ouvrir la fiche dans le tableau de bord : ' + `${config.adresse}/admin/#/demandes/${ligne.id}`, '',
+    `${l(f.nom)}${f.fonction ? ' (' + l(f.fonction) + ')' : ''} — ${f.tel}${f.email ? ' — ' + f.email : ''}`,
+    f.organisation && `${l(f.profil)} : ${l(f.organisation)}${f.secteur ? ' (' + l(f.secteur) + ')' : ''}`,
+    f.postes && `Ordinateurs : ${l(f.postes)}`, f.situation && `Situation : ${l(f.situation)}`,
+    f.accompagnement && `Accompagnement : ${l(f.accompagnement)}`, besoins.length && `Besoins : ${l(besoins.join(', '))}`,
+    f.moment && `À rappeler : ${l(f.moment)}`, f.utm_campaign && `Campagne : ${l(f.utm_campaign)} (${l(f.utm_source)})`,
+    f.message && '', f.message && 'Message (écrit par le visiteur, ne pas cliquer sur un lien qu\'il contiendrait) :', f.message && '« ' + l(f.message) + ' »',
   ]).catch(e => console.error('Alerte :', e.message));
   return c.json({ ok: true }, 201);
 });
@@ -113,8 +115,9 @@ publique.post('/avis', async c => {
   const f = { note, nom, organisation: texte(d.organisation, 120), texte: avisTexte, tel: texte(d.tel, 30), page: cheminPage(d.page) };
   await sql`insert into avis ${sql(f)}`;
   await enregistrerEvenement(c, 'avis', { chemin: f.page || '/' });
-  alerter('avis', `Nouvel avis (${note}/5) — ${nom}`, [avisTexte, `— ${nom}${f.organisation ? ', ' + f.organisation : ''}`, '',
-    `À valider : ${config.adresse}/admin/#/avis`]).catch(e => console.error('Alerte :', e.message));
+  const l = v => String(v || '').replace(/\s+/g, ' ').trim();
+  alerter('avis', `Nouvel avis (${note}/5) — ${l(nom)}`, ['>>> À valider dans le tableau de bord : ' + `${config.adresse}/admin/#/avis`, '',
+    '« ' + l(avisTexte) + ' »', `— ${l(nom)}${f.organisation ? ', ' + l(f.organisation) : ''}`]).catch(e => console.error('Alerte :', e.message));
   return c.json({ ok: true }, 201);
 });
 
@@ -129,7 +132,7 @@ publique.get('/avis', async c => {
 
 // ——— mesure d'audience : une page vue ou une action (clic WhatsApp, étape 2 du formulaire…) ———
 publique.post('/visites', async c => {
-  if (!limiter('visite:' + adresseIp(c), 240, 60_000)) return c.body(null, 204);
+  if (!limiter('visite:' + adresseIp(c), 120, 60_000) || !limiter('visite-global', 3000, 60_000)) return c.body(null, 204);
   const d = await corps(c);
   if (!d || !EVENEMENTS.includes(d.evenement || 'vue')) return c.body(null, 204);
   await enregistrerEvenement(c, d.evenement || 'vue', d);
@@ -171,7 +174,9 @@ publique.get('/telecharger/:slug', async c => {
   if (!p) return c.json({ erreur: 'Introuvable.' }, 404);
   if (p.prix) return c.json({ erreur: 'Ce logiciel est payant : contactez ZTi pour l\'obtenir.', payant: true }, 402);
   if (!p.fichier && !p.lien_externe) return c.json({ erreur: 'Bientôt disponible.' }, 404);
-  await sql`insert into telechargements (produit_id, visiteur) values (${p.id}, ${empreinteVisiteur(c)})`;
+  const visiteur = empreinteVisiteur(c);
+  const [deja] = await sql`select 1 from telechargements where produit_id = ${p.id} and visiteur = ${visiteur} and cree_le::date = current_date`;
+  if (!deja && !/bot|crawl|spider/i.test(c.req.header('user-agent') || '')) await sql`insert into telechargements (produit_id, visiteur) values (${p.id}, ${visiteur})`;
   await enregistrerEvenement(c, 'telechargement', { chemin: '/telechargements/', cible: slug });
   if (p.lien_externe) return c.redirect(p.lien_externe, 302);
   return servirFichier(c, p.fichier, p.fichier_nom);

@@ -21,11 +21,19 @@ export const config = {
   expediteurNom: env.BREVO_SENDER_NAME || 'ZTi',
   // derrière Cloudflare / Coolify, l'adresse du visiteur arrive dans un en-tête
   production: env.NODE_ENV === 'production',
+  derriereCloudflare: env.DERRIERE_CLOUDFLARE === '1',
+  // migrations avec un rôle propriétaire du schéma ; l'application avec un rôle aux droits limités
+  baseMigration: env.DATABASE_URL_MIGRATION || '',
 };
 
 export function verifierConfig() {
   const manque = [];
   if (!config.base) manque.push('DATABASE_URL');
-  if (config.production && config.secretVisites.length < 32) manque.push('SECRET_VISITES (32 caractères au moins)');
+  if (config.production) {
+    if (config.secretVisites.length < 32) manque.push('SECRET_VISITES (32 caractères au moins)');
+    if (!/^https:\/\//.test(config.adresse)) manque.push('ADRESSE_PUBLIQUE (en https://)');
+    if (!env.ORIGINES_AUTORISEES || config.origines.some(o => /localhost|127\.0\.0\.1/.test(o))) manque.push('ORIGINES_AUTORISEES (sans localhost)');
+    if (!env.SITE_PUBLIC) manque.push('SITE_PUBLIC');
+  }
   if (manque.length) throw new Error('Réglages manquants : ' + manque.join(', '));
 }

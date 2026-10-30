@@ -99,13 +99,15 @@ test('inscription : code de recommandation créé, compte en double refusé, mot
   assert.equal((await inscrire()).status, 409);
 });
 
-test('parrainage : points quand ZTi confirme la demande, puis quand le filleul devient client, jamais en double', async () => {
+test('parrainage : points au rendez-vous (pas au simple rappel), puis quand le filleul devient client, jamais en double', async () => {
   garder('membre', await inscrire());
   await demande({ parrain: 'MARIE-NGONO' });
   const [d] = await sql`select id, parrain_id from demandes`;
   assert.ok(d.parrain_id);
   await connecterAdmin();
   await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'rappelee' } });
+  assert.equal((await (await membre('/moi')).json()).solde, 0); // un simple rappel ne rapporte rien
+  await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'rendez_vous' } });
   await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'nouvelle' } });
   await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'devis' } });
   await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'client' } });
@@ -166,4 +168,42 @@ test('admin : bonus de points tracé, désactivation d’un ambassadeur', async 
   assert.equal(fiche.historique[0].auteur, 'Admin');
   assert.equal((await admin('/ambassadeurs/' + m.id, { methode: 'PATCH', corps: { actif: false } })).status, 200);
   assert.equal((await membre('/moi')).status, 401);
+});
+
+// ——— correctifs de l'audit du 30/10/2026 ———
+test('audit : même filleul (même téléphone) recommandé deux fois = des points une seule fois', async () => {
+  garder('membre', await inscrire());
+  await demande({ parrain: 'marie-ngono' }); await demande({ parrain: 'marie-ngono', sujet: 'Deuxième' });
+  await connecterAdmin();
+  for (const d of await sql`select id from demandes`) await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'client' } });
+  assert.equal((await (await membre('/moi')).json()).solde, 110);
+});
+
+test('audit : un membre de l’équipe (non admin) ne peut ni passer « client » une fiche recommandée, ni traiter un échange, ni modifier une campagne', async () => {
+  garder('membre', await inscrire());
+  await demande({ parrain: 'marie-ngono' });
+  await sql`insert into equipe (email, nom, role, mot_de_passe, doit_changer) values ('m@zti.cm', 'Membre', 'membre', ${await hacher('motdepasse-solide-1')}, false)`;
+  garder('admin', await req('/v1/admin/connexion', { methode: 'POST', origine: ICI, corps: { email: 'm@zti.cm', mot_de_passe: 'motdepasse-solide-1' } }));
+  const [d] = await sql`select id from demandes`;
+  assert.equal((await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'client' } })).status, 403);
+  assert.equal((await admin('/demandes/' + d.id, { methode: 'PATCH', corps: { etat: 'devis' } })).status, 200); // le suivi normal reste permis
+  const [m] = await sql`select id from membres`;
+  const [e] = await sql`insert into echanges (membre_id, recompense, points) values (${m.id}, 'X', 10) returning id`;
+  assert.equal((await admin('/echanges/' + e.id, { methode: 'PATCH', corps: { statut: 'accorde' } })).status, 403);
+  const [k] = await sql`insert into campagnes (nom, code) values ('C', 'cc') returning id`;
+  assert.equal((await admin('/campagnes/' + k.id, { methode: 'PATCH', corps: { nom: 'C', code: 'cc', budget: 1 } })).status, 403);
+});
+
+test('audit : sans DERRIERE_CLOUDFLARE, l’en-tête cf-connecting-ip est ignoré (les limites tiennent)', async () => {
+  for (let i = 0; i < 5; i++) await req('/v1/demandes', { methode: 'POST', origine: SITE, corps: { nom: 'Robot', tel: '699000000', accord: true }, entetes: { 'cf-connecting-ip': '10.0.0.' + i } });
+  const r = await req('/v1/demandes', { methode: 'POST', origine: SITE, corps: { nom: 'Robot', tel: '699000000', accord: true }, entetes: { 'cf-connecting-ip': '10.9.9.9' } });
+  assert.equal(r.status, 429);
+});
+
+test('audit : « mot de passe oublié » limité par adresse e-mail, un seul lien valable', async () => {
+  await inscrire();
+  const oubli = ip => req('/v1/membres/oubli', { methode: 'POST', origine: ICI, corps: { email: 'marie@exemple.cm' }, entetes: { 'x-forwarded-for': ip } });
+  for (let i = 0; i < 3; i++) assert.equal((await oubli('10.1.1.' + i)).status, 200);
+  assert.equal((await oubli('10.1.1.99')).status, 429);
+  assert.equal((await sql`select count(*)::int as n from jetons_membres`)[0].n, 1);
 });
