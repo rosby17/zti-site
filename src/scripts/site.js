@@ -278,3 +278,12 @@ if (merci) {
     $('[data-envoi]', merci).hidden = false;
   }
 }
+
+/* ---------- lueur des cartes qui suit la souris ---------- */
+if (matchMedia('(hover: hover)').matches) {
+  document.addEventListener('pointermove', e => {
+    const c = e.target.closest?.('.carte'); if (!c) return;
+    const r = c.getBoundingClientRect();
+    c.style.setProperty('--mx', `${e.clientX - r.left}px`); c.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }, { passive: true });
+}

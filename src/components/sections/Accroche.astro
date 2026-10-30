@@ -1,7 +1,8 @@
 ---
 import Bouton from '../Bouton.astro';
 import Icone from '../Icone.astro';
-import { md, lien } from '../../lib/contenu';
+import { md, lien, reglages } from '../../lib/contenu';
+const r = await reglages();
 const { s, premier } = Astro.props as { s: any; premier: boolean };
 const fond = s.fond || 'nuit';
 const sombre = ['nuit', 'bleu', 'noir'].includes(fond);
@@ -13,9 +14,11 @@ const apres = i >= 0 ? titre.slice(i + accent.length) : '';
 const Titre = premier ? 'h1' : 'h2';
 ---
 <section class={`section accroche fond-${fond} ${sombre ? 'sombre' : ''} ${s.image ? '' : 'sans-image'}`} id={s.ancre || undefined}>
+  {s.image && <div class="orbe" aria-hidden="true"></div>}
   <div class="contenu">
     <div class="grille">
       <div class={premier ? '' : 'rv'}>
+        {premier && <p class="statut"><span class="point"></span>{r.nom} · Yaoundé · en service</p>}
         {s.pastilles?.length > 0 && <ul class="pastilles">{s.pastilles.map((p: string) => <li>{p}</li>)}</ul>}
         <Titre>{avant}{i >= 0 && <span class="accent">{accent}</span>}{apres}</Titre>
         {s.texte && <div class="chapo texte-riche" set:html={md(s.texte)} />}
@@ -27,7 +30,11 @@ const Titre = premier ? 'h1' : 'h2';
         )}
         {s.sous_bouton && <p class="sous-bouton">{s.sous_bouton}</p>}
       </div>
-      {s.image && <div class={`visuel ${premier ? '' : 'rv'}`}><img src={lien(s.image)} style={`object-position:${({ gauche: '15% 30%', droite: '85% 30%', centre: '50% 30%' } as any)[s.cadrage] || '50% 30%'}`} alt={s.image_texte || ''} loading={premier ? 'eager' : 'lazy'} fetchpriority={premier ? 'high' : undefined}></div>}
+      {s.image && <div class={`visuel ${premier ? '' : 'rv'}`}>
+        <span class="puce puce-haut"><span class="point"></span>Diagnostic offert</span>
+        <span class="puce puce-bas">Depuis {r.depuis}<b>Votre partenaire de confiance</b></span>
+        <img src={lien(s.image)} style={`object-position:${({ gauche: '15% 30%', droite: '85% 30%', centre: '50% 30%' } as any)[s.cadrage] || '50% 30%'}`} alt={s.image_texte || ''} loading={premier ? 'eager' : 'lazy'} fetchpriority={premier ? 'high' : undefined}>
+      </div>}
     </div>
     {s.bas && <p class={`bas ${premier ? '' : 'rv'}`}>{s.bas}</p>}
   </div>

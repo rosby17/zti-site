@@ -6,8 +6,13 @@ const liste = await references();
 ---
 {liste.length > 0 && (
   <Cadre premier={premier} s={s} defaut="ivoire" id={s.ancre || 'references'} centre>
-    <ul class="logos">
-      {liste.map(r => <li class="rv"><img src={lien(r.logo)} alt="" loading="lazy">{r.nom}</li>)}
-    </ul>
+    <div class="defile">
+      <ul class="logos">
+        {liste.map(r => <li><img src={lien(r.logo)} alt="" loading="lazy">{r.nom}</li>)}
+      </ul>
+      <ul class="logos" aria-hidden="true">
+        {liste.map(r => <li><img src={lien(r.logo)} alt="" loading="lazy">{r.nom}</li>)}
+      </ul>
+    </div>
   </Cadre>
 )}

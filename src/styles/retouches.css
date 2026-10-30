@@ -1,0 +1,98 @@
+/* Retouches validées par ZTi (30/10) : on garde la mise en page et les couleurs de la version 1, et on reprend de la
+   proposition « ZTi Système » : les boutons en dégradé, les animations (sphère, étiquettes flottantes, point « en service »,
+   apparitions douces, lueur des cartes, références qui défilent), le grand « ZTi » du pied de page, et des blancs cassés
+   au lieu du blanc pur (moins fatigant pour les yeux). */
+:root {
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --degrade: linear-gradient(135deg, #02008A 0%, #1565FF 100%);
+  --fond-clair: #F7F8FC;   /* remplace le blanc pur des sections « blanc » */
+  --fond-moyen: #EDF0F8;   /* sections « ivoire » : un ton plus soutenu, pour bien séparer deux sections */
+}
+
+/* ——— blancs cassés ——— */
+body { background: var(--fond-clair); }
+.fond-blanc { background: var(--fond-clair); }
+.fond-ivoire { background: var(--fond-moyen); }
+.fond-pale { background: #E6EBF8; }
+.carte, .pack, .question, .formulaire, .calc, .logos li, .attestations button, .avis-merci { background-color: #FDFDFF; }
+.fond-blanc .carte, .fond-blanc .question, .fond-blanc .pack { border-color: #E1E6F3; }
+.champ input, .champ textarea { background: #F3F5FB; }
+
+/* ——— boutons ——— */
+.btn { background: var(--degrade); color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 10px 26px rgba(21,101,255,.28); }
+.btn .pastille { background: #fff; color: #02008A; }
+.btn:hover, .btn:focus-visible { background: var(--degrade); color: #fff; transform: translateY(-2px); box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 16px 36px rgba(21,101,255,.38); }
+.btn:hover .pastille, .btn:focus-visible .pastille { background: #fff; color: #1565FF; transform: translateX(4px); }
+.sombre .btn { box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 12px 30px rgba(21,101,255,.35), 0 0 0 1px rgba(255,255,255,.12); }
+.fond-bleu .btn { background: #fff; color: #02008A; }
+.fond-bleu .btn .pastille { background: var(--degrade); color: #fff; }
+.fond-bleu .formulaire .btn, .fond-bleu .donner-avis .btn { background: var(--degrade); color: #fff; }
+.fond-bleu .formulaire .btn .pastille { background: #fff; color: #02008A; }
+.choix button[aria-checked="true"], .choix button[aria-pressed="true"] { background: var(--degrade); border-color: transparent; }
+
+/* ——— accroche animée ——— */
+.accroche { isolation: isolate; }
+.accroche .grille { position: relative; z-index: 1; }
+.statut { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 20px; padding: 7px 14px 7px 10px; border-radius: 999px;
+  background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+  font: 500 12px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: #D7DCF3; }
+.point { width: 8px; height: 8px; border-radius: 50%; background: #18C26B; flex: none; animation: pouls 2.2s infinite; }
+@keyframes pouls { 0% { box-shadow: 0 0 0 0 rgba(24,194,107,.55); } 70% { box-shadow: 0 0 0 9px rgba(24,194,107,0); } 100% { box-shadow: 0 0 0 0 rgba(24,194,107,0); } }
+.accroche .visuel { position: relative; overflow: visible; }
+.accroche .visuel img { border-radius: 26px; }
+.puce { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 16px;
+  background: rgba(255,255,255,.88); border: 1px solid rgba(255,255,255,.9); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 18px 40px rgba(1,0,56,.35); font: 600 14px var(--boutons); color: #0A0D3A; animation: flotte 6s ease-in-out infinite; }
+.puce-haut { top: 28px; left: -26px; }
+.puce-bas { bottom: 34px; right: -22px; flex-direction: column; align-items: flex-start; gap: 2px; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: #1565FF; animation-delay: -3s; }
+.puce-bas b { font: 700 15px var(--titres); letter-spacing: -.01em; text-transform: none; color: #0A0D3A; }
+@keyframes flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+/* la sphère bleue derrière la photo */
+.orbe { position: absolute; z-index: 0; width: clamp(280px, 32vw, 500px); aspect-ratio: 1; right: -5vw; top: 40px; border-radius: 50%; pointer-events: none; opacity: .85;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255,255,255,.9) 0 4%, rgba(255,255,255,0) 18%),
+    repeating-linear-gradient(-28deg, rgba(255,255,255,0) 0 18px, rgba(255,255,255,.22) 22px, rgba(255,255,255,0) 30px),
+    radial-gradient(circle at 40% 35%, #CFE6FF 0%, #6FB4FF 22%, #1565FF 48%, #02008A 78%, #010038 100%);
+  box-shadow: inset -30px -40px 80px rgba(1,0,56,.5), inset 20px 20px 60px rgba(255,255,255,.3), 0 40px 140px rgba(21,101,255,.45);
+  animation: orbe 14s ease-in-out infinite; }
+@keyframes orbe { 0%, 100% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(-24px, 18px) rotate(12deg); } }
+@media (max-width: 1100px) { .orbe { opacity: .35; filter: blur(2px); } }
+@media (max-width: 860px) {
+  .orbe { width: 240px; right: -80px; top: 60px; }
+  .puce-haut { left: 12px; top: 12px; } .puce-bas { right: 12px; bottom: 12px; }
+}
+
+/* ——— cartes : lueur qui suit la souris ——— */
+.carte { position: relative; isolation: isolate; }
+.carte::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0; transition: opacity .25s; pointer-events: none;
+  background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), rgba(21,101,255,.12), transparent 60%); }
+.sombre .carte::after { background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0%), rgba(159,208,255,.14), transparent 60%); }
+.carte:hover::after { opacity: 1; }
+
+/* ——— références : bandeau qui défile ——— */
+.defile { display: flex; gap: 14px; margin-top: 36px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+.defile .logos { display: flex; flex: none; gap: 14px; margin: 0; padding: 0; animation: defile 38s linear infinite; }
+.defile:hover .logos { animation-play-state: paused; }
+.defile .logos li { width: 200px; flex: none; }
+@keyframes defile { to { transform: translateX(calc(-100% - 14px)); } }
+
+/* ——— pied de page : grand « ZTi » en filigrane ——— */
+.pied { position: relative; overflow: hidden; padding-bottom: 20px; }
+.pied .geant { margin: 48px 0 -6px; font: 800 clamp(120px, 26vw, 360px)/.8 var(--titres); letter-spacing: -.07em; text-align: center; user-select: none;
+  color: transparent; background: linear-gradient(180deg, rgba(159,208,255,.28), rgba(159,208,255,0) 85%); -webkit-background-clip: text; background-clip: text; }
+.pied .bas { margin-top: 0; position: relative; }
+
+/* ——— apparitions plus douces ——— */
+.rv { filter: blur(6px); transition: opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1), filter .9s cubic-bezier(.2,.7,.2,1); }
+.rv.vu, .sans-js .rv { filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rv { filter: none; } .orbe, .puce, .point { animation: none; }
+  .defile { flex-wrap: wrap; justify-content: center; -webkit-mask-image: none; mask-image: none; }
+  .defile .logos { flex-wrap: wrap; justify-content: center; animation: none; } .defile .logos[aria-hidden] { display: none; }
+}
+
+/* en-tête : le petit texte à côté du logo tient sur deux lignes, et s'efface quand le menu est serré */
+.entete .marque small { white-space: nowrap; }
+@media (max-width: 1380px) and (min-width: 1101px) { .entete .marque small { display: none; } }
