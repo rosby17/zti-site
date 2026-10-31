@@ -1,0 +1,47 @@
+# Publication du site ZTi sur GitHub Pages, sans réglage administrateur :
+# - le code et les contenus (modifiés par Pages CMS) sont sur la branche « source » ;
+# - ce programme construit le site et range les pages prêtes sur la branche « main », que GitHub Pages affiche telle quelle.
+# Il tourne à chaque modification de « source », chaque nuit à 00 h 05 heure de Yaoundé (23 h 05 UTC, pour les saisons
+# programmées) et à la demande (onglet Actions › Publier le site › Run workflow).
+name: Publier le site
+on:
+  push:
+    branches: [source]
+  schedule:
+    - cron: '5 23 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publication
+  cancel-in-progress: false
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: source
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node outils/verifier-contenus.mjs
+      - name: Construire le site
+        run: |
+          DEPOT="${GITHUB_REPOSITORY#*/}"
+          COMPTE="${GITHUB_REPOSITORY_OWNER,,}"
+          if [ "${DEPOT,,}" = "$COMPTE.github.io" ]; then BASE=/; else BASE="/$DEPOT"; fi
+          SITE_URL="https://$COMPTE.github.io" SITE_BASE="$BASE" npm run build
+      - name: Ranger les pages sur la branche main
+        run: |
+          cp -r .github dist/.github
+          touch dist/.nojekyll
+          cd dist
+          git init -q -b main
+          git config user.name "Publication du site"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publication du $(TZ=Africa/Douala date '+%d/%m/%Y à %H h %M')"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" main
